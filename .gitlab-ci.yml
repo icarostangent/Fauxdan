@@ -5,10 +5,6 @@ stages:
 variables:
   ANSIBLE_HOST_KEY_CHECKING: "False"
 
-before_script:
-  # Install Ansible and dependencies
-  - apt-get update && apt-get install -y ansible sshpass
-
 provision:
   stage: provision
   script:
@@ -30,4 +26,3 @@ deploy:
     - master
   needs:
     - provision
-
