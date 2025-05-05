@@ -1,0 +1,41 @@
+---
+- name: Deploy Docker Compose Application
+  hosts: all
+  become: no
+  vars:
+    workspace_dir: /home/josh/workspace/fauxdan
+
+  tasks:
+    - name: Create workspace directory
+      file:
+        path: "{{ workspace_dir }}"
+        state: directory
+        owner: josh
+        group: josh
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      copy:
+        src: docker-compose.production.yml
+        dest: "{{ workspace_dir }}/docker-compose.production.yml"
+        mode: '0644'
+        owner: josh
+        group: josh
+    
+    - name: Copy .env.production file
+      copy:
+        src: .env.production
+        dest: "{{ workspace_dir }}/.env.production"
+        mode: '0600'
+        owner: josh
+        group: josh
+
+    - name: Pull Docker images
+      shell: docker compose -f {{ workspace_dir }}/docker-compose.production.yml pull
+      args:
+        chdir: "{{ workspace_dir }}"
+
+    - name: Start Docker Compose
+      shell: docker compose -f {{ workspace_dir }}/docker-compose.production.yml up -d --remove-orphans
+      args:
+        chdir: "{{ workspace_dir }}"

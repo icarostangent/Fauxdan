@@ -1,0 +1,36 @@
+{
+    # Development configuration
+    debug
+    admin off
+    local_certs
+    # Allow self-signed certs for development
+    skip_install_trust
+}
+
+localhost, dev2.icarostangent.lab {
+    # Force self-signed certificate
+    tls internal
+
+    # Handle API requests
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Handle static files
+    handle /static/* {
+        root * /static
+        file_server
+    }
+
+    # Handle frontend requests
+    handle * {
+        reverse_proxy frontend:3000
+    }
+
+    # Enable logging
+    log {
+        output stdout
+        format console
+        level DEBUG
+    }
+}

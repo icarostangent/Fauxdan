@@ -1,0 +1,30 @@
+services:
+  frontend:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+
+  backend:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod.backend
+      
+  scanner:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod.scanner
+
+  caddy:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile
+
+  tor:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
+    build:
+      context: ./tor
+      dockerfile: Dockerfile

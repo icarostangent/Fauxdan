@@ -1,0 +1,6 @@
+.env.dev
+.env.prod
+static
+celerybeat-schedule
+paused.conf
+backend/masscan/output

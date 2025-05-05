@@ -1,0 +1,15 @@
+FROM python:3.10
+
+WORKDIR /app
+
+COPY requirements.* ./
+RUN pip install -r requirements.txt
+RUN pip install -r requirements.prod.txt
+
+COPY . .
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=1s --retries=5 CMD curl -f http://localhost:8000/api/ || exit 1
+
+CMD ["python3", "manage.py", "runserver", "0.0.0.0:8000"]
