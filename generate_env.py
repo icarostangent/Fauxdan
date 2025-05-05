@@ -1,5 +1,6 @@
 import secrets
 import sys
+import os
 
 # Function to generate a secure password
 def generate_secure_password(length=16):
@@ -12,6 +13,10 @@ def create_env_file(env_type):
 
     source_file = '.env.sample'
     target_file = f'.env.{env_type}'
+
+    if os.path.exists(target_file):
+        print(f"Error: Target file '{target_file}' already exists.")
+        sys.exit(1)
 
     # Read the contents of the target file
     with open(source_file, 'r') as file:
