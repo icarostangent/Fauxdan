@@ -1,0 +1,32 @@
+stages:
+  - provision
+  - deploy
+
+variables:
+  ANSIBLE_HOST_KEY_CHECKING: "False"
+
+before_script:
+  # Install Ansible and dependencies
+  - apt-get update && apt-get install -y ansible sshpass
+
+provision:
+  stage: provision
+  script:
+    # Write SSH key and inventory to files
+    - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
+    - echo "$ANSIBLE_INVENTORY" > inventory
+    # Run the provision playbook
+    - ansible-playbook -i inventory --private-key id_rsa provision-server.yml
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  script:
+    - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
+    - echo "$ANSIBLE_INVENTORY" > inventory
+    - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml
+  only:
+    - main
+  needs:
+    - provision
