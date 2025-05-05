@@ -18,7 +18,7 @@ provision:
     # Run the provision playbook
     - ansible-playbook -i inventory --private-key id_rsa provision-server.yml
   only:
-    - main
+    - master
 
 deploy:
   stage: deploy
@@ -27,6 +27,6 @@ deploy:
     - echo "$ANSIBLE_INVENTORY" > inventory
     - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml
   only:
-    - main
+    - master
   needs:
     - provision
