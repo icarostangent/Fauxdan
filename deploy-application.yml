@@ -16,26 +16,26 @@
 
     - name: Copy docker-compose file
       copy:
-        src: docker-compose.production.yml
-        dest: "{{ workspace_dir }}/docker-compose.production.yml"
+        src: docker-compose.prod.yml
+        dest: "{{ workspace_dir }}/docker-compose.prod.yml"
         mode: '0644'
         owner: josh
         group: josh
     
-    - name: Copy .env.production file
+    - name: Copy .env.prod file
       copy:
-        src: .env.production
-        dest: "{{ workspace_dir }}/.env.production"
+        src: .env.prod
+        dest: "{{ workspace_dir }}/.env.prod"
         mode: '0600'
         owner: josh
         group: josh
 
     - name: Pull Docker images
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.production.yml pull
+      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml pull
       args:
         chdir: "{{ workspace_dir }}"
 
     - name: Start Docker Compose
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.production.yml up -d --remove-orphans
+      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
