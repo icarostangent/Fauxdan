@@ -12,8 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os  # Add this import at the top
 from pathlib import Path
-from corsheaders.defaults import default_headers
-from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'default-secret-key')  # Update this line
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'default-secret-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
@@ -94,7 +92,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.getenv('DJANGO_DB_NAME', 'search_engine'),
+        'NAME': os.getenv('DJANGO_DB_NAME', 'fauxdan'),
         'USER': os.getenv('DJANGO_DB_USER', 'django'),
         'PASSWORD': os.getenv('DJANGO_DB_PASSWORD', 'password'),
         'HOST': os.getenv('DJANGO_DB_HOST', 'db'),
@@ -174,35 +172,6 @@ REDIS_DB = os.getenv('REDIS_DB', 0)
 REDIS_QUEUE_PORT_SCANNER = os.getenv('REDIS_QUEUE_PORT_SCANNER', 'queue_port_scanner')
 REDIS_QUEUE_SSL_SCANNER = os.getenv('REDIS_QUEUE_SSL_SCANNER', 'queue_ssl_scanner')
 REDIS_BATCH_SIZE = os.getenv('REDIS_BATCH_SIZE', 1000)
-
-CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-
-CELERY_BEAT_SCHEDULE = {
-    'collector-task': {
-        'task': 'internet.tasks.periodic_collector_task',
-        'schedule': timedelta(seconds=30),
-        # Alternative: 'schedule': 60.0,  # runs every 60 seconds
-        'args': (),
-        'kwargs': {},
-    },
-    'process-ssl-queue-task': {
-        'task': 'internet.tasks.process_ssl_queue_task',
-        'schedule': timedelta(seconds=30),
-        # Alternative: 'schedule': 60.0,  # runs every 60 seconds
-        'args': (),
-        'kwargs': {},
-    },
-    # 'port-scanner-task': {
-    #     'task': 'internet.tasks.periodic_port_scanner_task',
-    #     'schedule': timedelta(seconds=10),
-    #     'args': (),
-    #     'kwargs': {},
-    # },
-}
 
 MASSCAN_RATE = os.getenv('MASSCAN_RATE', 7500)
 
