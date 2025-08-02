@@ -20,5 +20,5 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
     ALTER DATABASE $DJANGO_DB_NAME OWNER TO $DJANGO_DB_USER;
 EOSQL
 
-echo "Dumping database"
-pg_dump -U postgres -h localhost -p 5432 search_engine > search_engine.sql
+# Remove the problematic dump command - it's not needed for normal operation
+# If you need to dump the database, do it manually with proper permissions

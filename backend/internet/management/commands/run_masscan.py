@@ -1,12 +1,11 @@
 import asyncio
-import json
 import aioredis
 import re
 from datetime import datetime
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from internet.models import Scan
+from internet.models import Scan, Port, Host
 from internet.lib.proxychains import ProxyChainsConfigurator
 from internet.lib.masscan import MasscanConfigurator
 from asgiref.sync import sync_to_async
@@ -98,11 +97,23 @@ class Command(BaseCommand):
                     'port': int(match.group(1)),
                     'proto': match.group(2),  # 'tcp' or 'udp'
                     'host': match.group(3),      # IP address
-                    'timestamp': timezone.now().isoformat(),
                     'status': 'open'
                 }
                 # print(data)
-                await redis.rpush(settings.REDIS_QUEUE_PORT_SCANNER, json.dumps(data))
+                # await redis.rpush(settings.REDIS_QUEUE_PORT_SCANNER, json.dumps(data))
+
+                host_obj, created = await sync_to_async(Host.objects.get_or_create)(ip=data['host'])
+                if created:
+                    self.stdout.write(self.style.SUCCESS(f'New host discovered: {data["host"]}'))
+
+                await sync_to_async(Port.objects.create)(
+                    scan=scan,
+                    port_number=data['port'],
+                    proto=data['proto'],
+                    host=host_obj,
+                    last_seen=timezone.now(),
+                    status=data['status']
+                )
             return None
 
         async def process_runner(command, redis):
@@ -152,7 +163,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'Running masscan command: {self.masscan.get_cmd()}'))
                 return_code = await process_runner(self.masscan.get_cmd(), redis)
                 # Wrap the database operations with sync_to_async
-                await sync_to_async(scan.save)()
                 await sync_to_async(setattr)(scan, 'status', 'completed')
                 await sync_to_async(setattr)(scan, 'end_time', timezone.now())
                 await sync_to_async(scan.save)()
