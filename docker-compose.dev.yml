@@ -9,7 +9,7 @@ services:
       - ./frontend:/app 
       - node_modules:/app/node_modules
     environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - VUE_APP_API_URL=${VUE_APP_API_URL}
     restart: unless-stopped
 
   backend:

@@ -86,34 +86,58 @@ class Command(BaseCommand):
 
         scan = Scan.objects.create(scan_command=self.masscan.get_cmd(), scan_type='masscan')
 
+        def process_discovery(host_ip, port_number, proto, current_time, scan):
+            """Synchronous function to process a discovered port"""
+            # Get or create host
+            host_obj, host_created = Host.objects.get_or_create(ip=host_ip)
+            
+            # Update host's last_seen timestamp
+            host_obj.last_seen = current_time
+            host_obj.save()
+            
+            # Check if this port already exists for this host
+            existing_port = Port.objects.filter(
+                host=host_obj,
+                port_number=port_number,
+                proto=proto
+            ).first()
+            
+            if existing_port:
+                # Update existing port's last_seen timestamp and status
+                existing_port.last_seen = current_time
+                existing_port.status = 'open'
+                existing_port.save()
+                return f'Updated existing port: {host_ip}:{port_number}/{proto}', host_created
+            else:
+                # Create new port
+                Port.objects.create(
+                    scan=scan,
+                    port_number=port_number,
+                    proto=proto,
+                    host=host_obj,
+                    last_seen=current_time,
+                    status='open'
+                )
+                return f'New port discovered: {host_ip}:{port_number}/{proto}', host_created
+
         async def parse_stdout(stdout_line, redis):
             """Parse a line of stdout looking for port, protocol, and host information and send to Redis"""
             # Match pattern like: "Discovered open port 80/tcp on 192.168.1.1"
             port_pattern = r'Discovered open port (\d+)/(\w+) on ([0-9\.]+)'
             match = re.search(port_pattern, stdout_line)
             if match:
-                data = {
-                    'scan_id': scan.id,
-                    'port': int(match.group(1)),
-                    'proto': match.group(2),  # 'tcp' or 'udp'
-                    'host': match.group(3),      # IP address
-                    'status': 'open'
-                }
-                # print(data)
-                # await redis.rpush(settings.REDIS_QUEUE_PORT_SCANNER, json.dumps(data))
-
-                host_obj, created = await sync_to_async(Host.objects.get_or_create)(ip=data['host'])
-                if created:
-                    self.stdout.write(self.style.SUCCESS(f'New host discovered: {data["host"]}'))
-
-                await sync_to_async(Port.objects.create)(
-                    scan=scan,
-                    port_number=data['port'],
-                    proto=data['proto'],
-                    host=host_obj,
-                    last_seen=timezone.now(),
-                    status=data['status']
-                )
+                port_number = int(match.group(1))
+                proto = match.group(2)  # 'tcp' or 'udp'
+                host_ip = match.group(3)      # IP address
+                current_time = timezone.now()
+                
+                # Process the discovery synchronously
+                result, host_created = await sync_to_async(process_discovery)(host_ip, port_number, proto, current_time, scan)
+                
+                if host_created:
+                    self.stdout.write(self.style.SUCCESS(f'New host discovered: {host_ip}'))
+                
+                self.stdout.write(result)
             return None
 
         async def process_runner(command, redis):
@@ -165,12 +189,12 @@ class Command(BaseCommand):
                 # Wrap the database operations with sync_to_async
                 await sync_to_async(setattr)(scan, 'status', 'completed')
                 await sync_to_async(setattr)(scan, 'end_time', timezone.now())
-                await sync_to_async(scan.save)()
+                await sync_to_async(lambda: scan.save())()
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'Command failed with error: {str(e)}'))
                 await sync_to_async(setattr)(scan, 'status', 'failed')
                 await sync_to_async(setattr)(scan, 'end_time', timezone.now())
-                await sync_to_async(scan.save)()
+                await sync_to_async(lambda: scan.save())()
             finally:
                 await redis.close()
         
@@ -178,7 +202,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('Shutting down gracefully...'))
             await sync_to_async(setattr)(scan, 'status', 'interrupted')
             await sync_to_async(setattr)(scan, 'end_time', timezone.now())
-            await sync_to_async(scan.save)()
+            await sync_to_async(lambda: scan.save())()
 
         try:
             asyncio.run(main())

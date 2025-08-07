@@ -27,7 +27,7 @@ localhost, dev2.icarostangent.lab {
         reverse_proxy frontend:3000
     }
 
-    # Enable logging
+    # Detailed development logging
     log {
         output stdout
         format console

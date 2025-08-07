@@ -25,6 +25,12 @@ class Host(models.Model):
 
     def __str__(self):
         return str(self.ip)
+    
+    def update_last_seen(self):
+        """Update the last_seen timestamp to current time"""
+        from django.utils import timezone
+        self.last_seen = timezone.now()
+        self.save(update_fields=['last_seen'])
 
 
 class Port(models.Model):
@@ -35,10 +41,18 @@ class Port(models.Model):
     banner = models.TextField(blank=True, null=True)
     scan = models.ForeignKey('Scan', related_name='ports', on_delete=models.CASCADE)
     host = models.ForeignKey('Host', related_name='ports', on_delete=models.CASCADE)
-    last_seen = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return str(self.port_number)
+    
+    def update_last_seen(self):
+        """Update the last_seen timestamp to current time"""
+        from django.utils import timezone
+        self.last_seen = timezone.now()
+        self.save(update_fields=['last_seen'])
+    
+    class Meta:
+        unique_together = ['host', 'port_number', 'proto']
 
 
 class Proxy(models.Model):
