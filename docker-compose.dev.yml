@@ -83,16 +83,16 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
-  caddy:
-    image: caddy:latest
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.dev
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile
       - ./static:/static
-      - caddy_data:/data
-      - caddy_config:/config
+      - nginx_logs:/var/log/nginx
     depends_on:
       - frontend
       - backend
@@ -129,5 +129,4 @@ volumes:
   redis_data:
   node_modules:
   elasticsearch_data:
-  caddy_data:
-  caddy_config:
+  nginx_logs:

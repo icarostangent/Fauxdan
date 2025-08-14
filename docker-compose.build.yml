@@ -1,10 +1,4 @@
 services:
-  frontend:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/frontend
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-
   backend:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
     build:
@@ -17,11 +11,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod.scanner
 
-  caddy:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+  nginx:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/nginx
     build:
-      context: ./caddy
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        VUE_APP_API_URL: ${VUE_APP_API_URL}
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor

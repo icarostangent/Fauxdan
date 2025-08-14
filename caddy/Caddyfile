@@ -1,19 +1,21 @@
-fauxdan.io {
-    # Handle API requests
-    handle /api/* {
+fauxdan.io, localhost {
+    # Handle API requests - must be first and most specific
+    handle_path /api/* {
         reverse_proxy backend:8000
     }
 
     # Handle static files
-    handle /static/* {
+    handle_path /static/* {
         root * /static
         file_server
     }
 
-    # Handle frontend requests
-    handle * {
-        reverse_proxy frontend:3000
-    }
+    # Serve frontend files directly
+    root * /frontend
+    file_server
+    
+    # Handle SPA routing - try files first, then fall back to index.html
+    try_files {path} /index.html
 
     # Enable logging
     log {

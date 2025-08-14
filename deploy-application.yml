@@ -21,14 +21,6 @@
         mode: '0644'
         owner: josh
         group: josh
-    
-    - name: Copy .env.prod file
-      copy:
-        src: .env.prod
-        dest: "{{ workspace_dir }}/.env.prod"
-        mode: '0600'
-        owner: josh
-        group: josh
 
     - name: Pull Docker images
       shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml pull

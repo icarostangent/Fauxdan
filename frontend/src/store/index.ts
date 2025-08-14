@@ -1,5 +1,6 @@
 import { createStore } from 'vuex'
 import { Host } from '@/types'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface PaginatedHosts {
   results: Host[]
@@ -44,7 +45,7 @@ export default createStore<RootState>({
   actions: {
     async fetchHosts({ commit }, { page = 1 } = {}) {
       try {
-        const response = await fetch(`/api/hosts/?page=${page}`)
+        const response = await fetch(`${API_ENDPOINTS.hosts}/?page=${page}`)
         if (!response.ok) {
           throw new Error('Network response was not ok')
         }
@@ -57,7 +58,7 @@ export default createStore<RootState>({
     },
     async searchHosts({ commit }, { query, page = 1 }: { query: string, page: number }) {
       try {
-        const response = await fetch(`/api/search/?q=${encodeURIComponent(query)}&page=${page}&size=${100}`)
+        const response = await fetch(`${API_ENDPOINTS.search}/?q=${encodeURIComponent(query)}&page=${page}&size=${100}`)
         if (!response.ok) {
           throw new Error('Network response was not ok')
         }

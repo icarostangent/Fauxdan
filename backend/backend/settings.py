@@ -21,10 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'default-secret-key')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
+DEBUG = os.getenv('DJANGO_DEBUG') == 'True'
 
 ALLOWED_HOSTS = ['*',]
 
@@ -92,11 +92,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.getenv('DJANGO_DB_NAME', 'fauxdan'),
-        'USER': os.getenv('DJANGO_DB_USER', 'django'),
-        'PASSWORD': os.getenv('DJANGO_DB_PASSWORD', 'password'),
-        'HOST': os.getenv('DJANGO_DB_HOST', 'db'),
-        'PORT': os.getenv('DJANGO_DB_PORT', '5432'),
+        'NAME': os.getenv('DJANGO_DB_NAME'),
+        'USER': os.getenv('DJANGO_DB_USER'),
+        'PASSWORD': os.getenv('DJANGO_DB_PASSWORD'),
+        'HOST': os.getenv('DJANGO_DB_HOST'),
+        'PORT': os.getenv('DJANGO_DB_PORT'),
     }
 }
 
@@ -177,8 +177,9 @@ MASSCAN_RATE = os.getenv('MASSCAN_RATE', 7500)
 
 ELASTICSEARCH_DSL = {
     'default': {
-        'hosts': os.getenv('ELASTICSEARCH_HOST', 'http://database.icarostangent.lab:9200'),
-        # 'http_auth': ('elastic', 'changeme'),
-        # 'ca_certs': 'PATH_TO_http_ca.crt',
+        'hosts': os.getenv('ELASTICSEARCH_HOST'),
+        'verify_certs': False,
+        'ssl_show_warn': False,
+        'http_auth': (os.getenv('ELASTICSEARCH_USERNAME'), os.getenv('ELASTICSEARCH_PASSWORD')),
     },
 }

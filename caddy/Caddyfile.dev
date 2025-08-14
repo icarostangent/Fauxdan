@@ -22,8 +22,8 @@ localhost, dev2.icarostangent.lab {
         file_server
     }
 
-    # Handle frontend requests
-    handle * {
+    # Handle frontend requests - only for non-API, non-static paths
+    handle {
         reverse_proxy frontend:3000
     }
 
