@@ -9,8 +9,6 @@ from internet.serializers import (
 )
 from django.core.management import call_command
 from rest_framework import status
-from elasticsearch_dsl import Q as ElasticQ
-from internet.documents import HostDocument
 
 
 class ScanViewSet(viewsets.ModelViewSet):
@@ -157,114 +155,5 @@ class UniversalSearchView(APIView):
         
         return Response({
             'count': len(results),
-            'results': results
-        })
-
-
-class ElasticSearchView(APIView):
-    def get(self, request):
-        query = request.query_params.get('q', '')
-        page_size = int(request.query_params.get('size', 10))
-        page = int(request.query_params.get('page', 1))
-        
-        if not query:
-            return Response({'error': 'No search query provided'}, status=400)
-        
-        from_start = (page - 1) * page_size
-        query_terms = [term.strip() for term in query.split() if term.strip()]
-        
-        s = HostDocument.search()
-        
-        must_conditions = []
-        for term in query_terms:
-            term_query = ElasticQ(
-                'bool',
-                should=[
-                    # Host fields with fuzzy matching
-                    ElasticQ('match', ip={'query': term, 'fuzziness': 'AUTO'}),
-                    ElasticQ('match', hostname={'query': term, 'fuzziness': 'AUTO'}),
-                    
-                    # Domain fields (nested) with fuzzy matching
-                    ElasticQ('nested', 
-                        path='domains',
-                        query=ElasticQ(
-                            'bool',
-                            should=[
-                                ElasticQ('match', **{
-                                    'domains.name': {
-                                        'query': term,
-                                        'fuzziness': 'AUTO'
-                                    }
-                                }),
-                            ]
-                        )
-                    ),
-                    
-                    # Port fields (nested) with fuzzy matching
-                    ElasticQ('nested', 
-                        path='ports',
-                        query=ElasticQ(
-                            'bool',
-                            should=[
-                                ElasticQ('match', **{
-                                    'ports.banner': {
-                                        'query': term,
-                                        'fuzziness': 'AUTO'
-                                    }
-                                }),
-                                ElasticQ('match', **{
-                                    'ports.proto': {
-                                        'query': term,
-                                        'fuzziness': 'AUTO'
-                                    }
-                                }),
-                                ElasticQ('match', **{
-                                    'ports.status': {
-                                        'query': term,
-                                        'fuzziness': 'AUTO'
-                                    }
-                                }),
-                                ElasticQ('match', **{
-                                    'ports.service': {
-                                        'query': term,
-                                        'fuzziness': 'AUTO'
-                                    }
-                                }),
-                                # Port numbers should be exact matches
-                                *([ElasticQ('match', **{'ports.port_number': int(term)})] 
-                                  if term.isdigit() else [])
-                            ]
-                        )
-                    )
-                ],
-                minimum_should_match=1
-            )
-            must_conditions.append(term_query)
-        
-        q = ElasticQ('bool', must=must_conditions)
-        raw_response = s.query(q)[from_start:from_start + page_size].execute().to_dict()
-        
-        results = []
-        for hit in raw_response['hits']['hits']:
-            result = {
-                'id': hit['_id'],
-                'ip': hit['_source']['ip'],
-                'hostname': hit['_source'].get('hostname'),
-                'domains': hit['_source'].get('domains', []),
-                'ports': hit['_source'].get('ports', []),
-                'score': hit['_score']
-            }
-            results.append(result)
-        
-        total_count = raw_response['hits']['total']['value']
-        has_next = (page * page_size) < total_count
-        has_previous = page > 1
-        
-        return Response({
-            'count': total_count,
-            'next': f'?q={query}&page={page + 1}&size={page_size}' if has_next else None,
-            'previous': f'?q={query}&page={page - 1}&size={page_size}' if has_previous else None,
-            'page': page,
-            'page_size': page_size,
             'results': results
         })

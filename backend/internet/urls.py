@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     ScanViewSet, HostViewSet, DomainViewSet, PortViewSet, ProxyViewSet, 
-    DNSRelayViewSet, UniversalSearchView, CreateScanView, ElasticSearchView
+    DNSRelayViewSet, UniversalSearchView, CreateScanView
 )
 
 router = DefaultRouter()
@@ -16,6 +16,5 @@ router.register(r'dnsrelays', DNSRelayViewSet, basename='dnsrelays')
 urlpatterns = [
     path('create-scan/', CreateScanView.as_view(), name='create-scan'),
     path('search/', UniversalSearchView.as_view(), name='universal-search'),
-    # path('search/', ElasticSearchView.as_view(), name='elastic-search'),
     path('', include(router.urls)),
 ]

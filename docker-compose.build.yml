@@ -4,12 +4,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.backend
+    # Remove environment variables from here - they're not needed during build
       
   scanner:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.scanner
+    # Remove environment variables from here - they're not needed during build
 
   nginx:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/nginx
@@ -17,7 +19,7 @@ services:
       context: .
       dockerfile: nginx/Dockerfile
       args:
-        VUE_APP_API_URL: ${VUE_APP_API_URL}
+        VUE_APP_API_URL: ${VUE_APP_API_URL}  # Keep this - needed during build
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor

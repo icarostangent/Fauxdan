@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'rest_framework_simplejwt',
-    'django_elasticsearch_dsl',
 
     'internet',
 ]
@@ -174,12 +173,3 @@ REDIS_QUEUE_SSL_SCANNER = os.getenv('REDIS_QUEUE_SSL_SCANNER', 'queue_ssl_scanne
 REDIS_BATCH_SIZE = os.getenv('REDIS_BATCH_SIZE', 1000)
 
 MASSCAN_RATE = os.getenv('MASSCAN_RATE', 7500)
-
-ELASTICSEARCH_DSL = {
-    'default': {
-        'hosts': os.getenv('ELASTICSEARCH_HOST'),
-        'verify_certs': False,
-        'ssl_show_warn': False,
-        'http_auth': (os.getenv('ELASTICSEARCH_USERNAME'), os.getenv('ELASTICSEARCH_PASSWORD')),
-    },
-}

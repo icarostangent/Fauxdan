@@ -1,50 +1,27 @@
-# Build stage for frontend
+FROM nginx:latest
 
-FROM node:22-alpine AS frontend-builder
-WORKDIR /app
-
-# Accept build argument
-ARG VUE_APP_API_URL
-ENV VUE_APP_API_URL=$VUE_APP_API_URL
-
-# Copy package files and install ALL dependencies
-COPY frontend/package*.json ./
-RUN npm ci 
-
-# Copy frontend source code
-COPY frontend/ ./
-
-# Build the Vue application (now with environment variable available)
-RUN npm run build
-
-# Final Nginx stage
-FROM nginx:alpine
-
-# Install additional tools for SSL certificate generation and Let's Encrypt
-RUN apk add --no-cache openssl certbot
+# Install necessary packages
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
-RUN mkdir -p /etc/nginx/ssl /var/www/certbot /etc/letsencrypt
+RUN mkdir -p /static /frontend /var/log/nginx
 
-# Copy the built frontend files
-COPY --from=frontend-builder /app/dist /frontend
+# Copy nginx configuration
+COPY nginx/conf/ /etc/nginx/conf.d/
 
-# Copy Nginx configuration
-COPY nginx/nginx.conf /etc/nginx/nginx.conf
+# Copy static files (if any)
+COPY static/ /static/
 
-# Copy SSL setup script
-COPY nginx/ssl-setup.sh /usr/local/bin/ssl-setup.sh
-RUN chmod +x /usr/local/bin/ssl-setup.sh
+# Copy frontend files (if any)
+COPY frontend/ /frontend/
 
 # Set proper permissions
-RUN chown -R nginx:nginx /frontend /var/cache/nginx /var/log/nginx /etc/letsencrypt /var/www/certbot
-RUN chmod -R 755 /frontend /var/cache/nginx /var/log/nginx /etc/letsencrypt /var/www/certbot
+RUN chown -R nginx:nginx /static /frontend /var/log/nginx
 
+# Expose ports
 EXPOSE 80 443
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
-
-# Use the SSL setup script as entrypoint
-ENTRYPOINT ["/usr/local/bin/ssl-setup.sh"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

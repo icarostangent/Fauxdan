@@ -28,11 +28,9 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
     depends_on:
       - db
       - redis
-      - elasticsearch
     command: ["/bin/bash", "/app/init.sh"]
     restart: unless-stopped
       
@@ -48,7 +46,6 @@ services:
       - DJANGO_DB_USER=${DJANGO_DB_USER}
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
-      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
     depends_on:
       - db
       - redis
@@ -106,27 +103,8 @@ services:
       - "9090"
     restart: unless-stopped
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.1
-    expose:
-      - "9200"
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
 volumes:
   db_data:
   redis_data:
   node_modules:
-  elasticsearch_data:
   nginx_logs:

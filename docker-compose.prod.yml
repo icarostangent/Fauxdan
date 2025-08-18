@@ -1,13 +1,29 @@
+version: '3'
+
 services:
   backend:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
     restart: unless-stopped
     volumes:
       - static:/static
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
 
   scanner:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
     restart: unless-stopped
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
 
   redis:
     image: redis:alpine
@@ -16,20 +32,48 @@ services:
       - redis_data:/data
 
   nginx:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/nginx
+    image: nginx:latest
     ports:
       - "80:80"
       - "443:443"
+    restart: always
     volumes:
+      - ./nginx/conf/:/etc/nginx/conf.d/:ro
+      - ./certbot/www/:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
       - static:/static
       - nginx_logs:/var/log/nginx
-      - letsencrypt:/etc/letsencrypt
-      - certbot_webroot:/var/www/certbot
-    environment:
-      - LETSENCRYPT_EMAIL=icarostangent@gmail.com
     depends_on:
       - backend
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./certbot/www/:/var/www/certbot/:rw
+      - ./certbot/conf/:/etc/letsencrypt/:rw
+      - ./certbot/logs/:/var/log/letsencrypt/:rw
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+
+  ssl-renewer:
+    build:
+      context: ./ssl-renewer
+      dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./certbot/www/:/var/www/certbot/:rw
+      - ./certbot/conf/:/etc/letsencrypt/:rw
+      - ./certbot/logs/:/var/log/letsencrypt/:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - RENEWAL_INTERVAL=${SSL_RENEWAL_INTERVAL}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    depends_on:
+      - certbot
+      - nginx
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
@@ -39,5 +83,3 @@ volumes:
   static:
   redis_data:
   nginx_logs:
-  letsencrypt:
-  certbot_webroot:
