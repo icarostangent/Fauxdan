@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   backend:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
@@ -31,49 +29,17 @@ services:
     volumes:
       - redis_data:/data
 
-  nginx:
-    image: nginx:latest
+  caddy:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-    restart: always
-    volumes:
-      - ./nginx/conf/:/etc/nginx/conf.d/:ro
-      - ./certbot/www/:/var/www/certbot/:ro
-      - ./certbot/conf/:/etc/nginx/ssl/:ro
-      - static:/static
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - backend
-
-  certbot:
-    image: certbot/certbot:latest
-    volumes:
-      - ./certbot/www/:/var/www/certbot/:rw
-      - ./certbot/conf/:/etc/letsencrypt/:rw
-      - ./certbot/logs/:/var/log/letsencrypt/:rw
     environment:
-      - DOMAIN_NAME=${DOMAIN_NAME}
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
-
-  ssl-renewer:
-    build:
-      context: ./ssl-renewer
-      dockerfile: Dockerfile
-    restart: unless-stopped
+      - VUE_APP_API_URL=${VUE_APP_API_URL}
     volumes:
-      - ./certbot/www/:/var/www/certbot/:rw
-      - ./certbot/conf/:/etc/letsencrypt/:rw
-      - ./certbot/logs/:/var/log/letsencrypt/:rw
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - RENEWAL_INTERVAL=${SSL_RENEWAL_INTERVAL}
-      - DOMAIN_NAME=${DOMAIN_NAME}
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    depends_on:
-      - certbot
-      - nginx
+      - caddy_data:/data
+      - caddy_logs:/var/log/caddy
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
@@ -82,4 +48,5 @@ services:
 volumes:
   static:
   redis_data:
-  nginx_logs:
+  caddy_data:
+  caddy_logs:

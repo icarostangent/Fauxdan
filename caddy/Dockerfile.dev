@@ -1,0 +1,20 @@
+# Use the official Caddy image for development
+FROM caddy:2-alpine
+
+# Install any additional tools if needed for development
+RUN apk add --no-cache curl
+
+# Create necessary directories
+RUN mkdir -p /etc/caddy /data /caddy
+
+# Set working directory
+WORKDIR /caddy
+
+# Copy the development Caddyfile
+COPY Caddyfile.dev /etc/caddy/Caddyfile
+
+# Expose ports for HTTP and HTTPS
+EXPOSE 80 443
+
+# Start Caddy with the development configuration
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

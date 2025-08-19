@@ -1,10 +1,8 @@
----
 - name: Deploy Docker Compose Application
   hosts: all
   become: no
   vars:
     workspace_dir: /home/josh/workspace/fauxdan
-    domain_name: "{{ ansible_host | default(ansible_default_ipv4.address) }}"
 
   tasks:
     - name: Create workspace directory
@@ -22,8 +20,8 @@
         mode: '0644'
         owner: josh
         group: josh
-
-    - name: Copy environment file
+    
+    - name: Copy .env file
       copy:
         src: .env.prod
         dest: "{{ workspace_dir }}/.env.prod"
@@ -31,115 +29,12 @@
         owner: josh
         group: josh
 
-    - name: Copy SSL setup scripts and documentation
-      copy:
-        src: "{{ item }}"
-        dest: "{{ workspace_dir }}/{{ item }}"
-        mode: '0755'
-        owner: josh
-        group: josh
-      loop:
-        - setup-ssl.sh
-        - renew-ssl.sh
-
-    - name: Copy SSL renewal service
-      copy:
-        src: ssl-renewer/
-        dest: "{{ workspace_dir }}/ssl-renewer/"
-        mode: '0755'
-        owner: josh
-        group: josh
-
-    - name: Copy SSL documentation
-      copy:
-        src: SSL-SETUP-README.md
-        dest: "{{ workspace_dir }}/SSL-SETUP-README.md"
-        mode: '0644'
-        owner: josh
-        group: josh
-
-    - name: Copy nginx configuration
-      copy:
-        src: nginx/conf/
-        dest: "{{ workspace_dir }}/nginx/conf/"
-        mode: '0644'
-        owner: josh
-        group: josh
-
-    - name: Create certbot directories
-      file:
-        path: "{{ workspace_dir }}/{{ item }}"
-        state: directory
-        owner: josh
-        group: josh
-        mode: '0755'
-      loop:
-        - certbot/www
-        - certbot/conf
-        - certbot/www/.well-known
-        - certbot/www/.well-known/acme-challenge
-
     - name: Pull Docker images
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml pull
+      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod pull
       args:
         chdir: "{{ workspace_dir }}"
 
-    - name: Start webserver only (for SSL setup)
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod up -d nginx
-      args:
-        chdir: "{{ workspace_dir }}"
-
-    - name: Wait for webserver to be ready
-      wait_for:
-        port: 80
-        host: "{{ ansible_default_ipv4.address }}"
-        delay: 10
-        timeout: 60
-
-    - name: Check if SSL certificates already exist
-      shell: test -f {{ workspace_dir }}/certbot/conf/live/{{ domain_name }}/fullchain.pem
-      args:
-        chdir: "{{ workspace_dir }}"
-      register: ssl_check
-      failed_when: false
-
-    - name: Initialize SSL certificates
-      shell: ./setup-ssl.sh {{ domain_name }}
-      args:
-        chdir: "{{ workspace_dir }}"
-      when: ssl_check.rc != 0
-      register: ssl_setup
-      failed_when: false
-
-    - name: Check SSL setup result
-      debug:
-        msg: "SSL setup {{ 'succeeded' if ssl_setup.rc == 0 else 'failed' }}"
-      when: ssl_check.rc != 0 and ssl_setup is defined
-
-    - name: Start all services (after SSL setup)
+    - name: Start Docker Compose
       shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
-      when: ssl_check.rc != 0
-
-    - name: Start all services (SSL already exists)
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod up -d --remove-orphans
-      args:
-        chdir: "{{ workspace_dir }}"
-      when: ssl_check.rc == 0
-
-    - name: Wait for HTTPS to be ready
-      wait_for:
-        port: 443
-        host: "{{ ansible_default_ipv4.address }}"
-        delay: 10
-        timeout: 60
-      when: ssl_check.rc != 0
-
-    - name: Display deployment status
-      debug:
-        msg: 
-          - "Deployment completed successfully!"
-          - "HTTP available on port 80"
-          - "HTTPS status: {{ 'Available on port 443' if ssl_check.rc == 0 or (ssl_setup is defined and ssl_setup.rc == 0) else 'Not available - SSL setup failed' }}"
-          - "SSL certificates: {{ 'Initialized' if ssl_check.rc != 0 and ssl_setup is defined and ssl_setup.rc == 0 else 'Already existed' if ssl_check.rc == 0 else 'Failed to initialize' }}"
