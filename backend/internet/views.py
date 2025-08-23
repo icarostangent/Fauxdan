@@ -36,6 +36,14 @@ class HostViewSet(viewsets.ModelViewSet):
     queryset = Host.objects.all()
     serializer_class = HostSerializer
     filterset_fields = ['ip', 'domains__name']
+    
+    def get_queryset(self):
+        # Prefetch all related data in a single query
+        return Host.objects.prefetch_related(
+            'ports',
+            'domains', 
+            'ssl_certificates'
+        ).select_related('scan')
 
 
 class ProxyViewSet(viewsets.ModelViewSet):
