@@ -3,7 +3,7 @@
     <div class="nav-container">
       <div class="brand">
         <h1 class="brand-name">Fauxdan</h1>
-        <span class="brand-tagline">Internet Intelligence</span>
+        <span class="brand-tagline">Not Shodan</span>
       </div>
       <div class="nav-links">
         <router-link to="/">Home</router-link>
