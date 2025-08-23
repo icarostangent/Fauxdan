@@ -12,6 +12,8 @@ from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import ListAPIView
 from backend.pagination import PathOnlyPagination
+import time
+from django.db import connection
 
 
 class ScanViewSet(viewsets.ModelViewSet):
@@ -33,17 +35,27 @@ class DomainViewSet(viewsets.ModelViewSet):
 
 
 class HostViewSet(viewsets.ModelViewSet):
-    queryset = Host.objects.all()
+    queryset = Host.objects.prefetch_related(
+        'ports',
+        'domains', 
+        'ssl_certificates'
+    ).select_related('scan')
     serializer_class = HostSerializer
     filterset_fields = ['ip', 'domains__name']
     
-    def get_queryset(self):
-        # Prefetch all related data in a single query
-        return Host.objects.prefetch_related(
-            'ports',
-            'domains', 
-            'ssl_certificates'
-        ).select_related('scan')
+    def list(self, request, *args, **kwargs):
+        start_time = time.time()
+        try:
+            response = super().list(request, *args, **kwargs)
+            end_time = time.time()
+            print(f"✅ HostViewSet.list took {end_time - start_time:.2f} seconds")
+            print(f"✅ Database queries: {len(connection.queries)}")
+            return response
+        except Exception as e:
+            end_time = time.time()
+            print(f"❌ HostViewSet.list FAILED after {end_time - start_time:.2f} seconds")
+            print(f"❌ Error: {str(e)}")
+            raise
 
 
 class ProxyViewSet(viewsets.ModelViewSet):
@@ -148,4 +160,9 @@ class UniversalSearchView(ListAPIView):
         q_objects |= Q(ports__port_number__icontains=query)
         q_objects |= Q(ports__proto__icontains=query)
         
-        return Host.objects.filter(q_objects).distinct()
+        # Add prefetch_related to prevent N+1 queries
+        return Host.objects.filter(q_objects).prefetch_related(
+            'ports',
+            'domains', 
+            'ssl_certificates'
+        ).select_related('scan').distinct()

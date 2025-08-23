@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models import Q
 
 
 class Scan(models.Model):
@@ -32,6 +33,11 @@ class Host(models.Model):
         self.last_seen = timezone.now()
         self.save(update_fields=['last_seen'])
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['ip']),  # For IP searches
+        ]
+
 
 class Port(models.Model):
     port_number = models.IntegerField()
@@ -53,6 +59,11 @@ class Port(models.Model):
     
     class Meta:
         unique_together = ['host', 'port_number', 'proto']
+        indexes = [
+            models.Index(fields=['host']),  # For prefetch performance
+            models.Index(fields=['port_number']),  # For port number searches
+            models.Index(fields=['proto']),  # For protocol searches
+        ]
 
 
 class Proxy(models.Model):
@@ -77,6 +88,12 @@ class Domain(models.Model):
 
     def __str__(self):
         return str(self.name)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['host']),  # For prefetch performance
+            models.Index(fields=['name']),  # For domain name searches
+        ]
 
 
 class DNSRelay(models.Model):
@@ -100,3 +117,8 @@ class SSLCertificate(models.Model):
 
     def __str__(self):
         return f"{self.subject_cn} ({self.fingerprint})"
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['host']),  # Critical for prefetch performance
+        ]
