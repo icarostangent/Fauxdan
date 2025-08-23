@@ -235,6 +235,7 @@ export default defineComponent({
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .pagination-btn {
@@ -269,6 +270,8 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .ellipsis {
@@ -277,42 +280,97 @@ export default defineComponent({
   font-weight: 500;
 }
 
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
+/* Responsive adjustments for small screens */
+@media (max-width: 768px) {
+  .pagination-container {
+    padding: 16px;
+    margin-top: 16px;
+  }
+  
+  .pagination-info {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  
+  .pagination-controls {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  
+  .pagination-btn {
+    padding: 10px 8px;
+    min-width: 36px;
+    font-size: 13px;
+  }
+  
+  .page-numbers {
+    gap: 3px;
+  }
 }
 
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f4f6;
-  border-top: 4px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+@media (max-width: 480px) {
+  .pagination-container {
+    padding: 12px;
+    margin-top: 12px;
+  }
+  
+  .pagination-controls {
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  
+  .pagination-btn {
+    padding: 8px 6px;
+    min-width: 32px;
+    font-size: 12px;
+  }
+  
+  /* Hide some pagination buttons on very small screens */
+  .pagination-btn:not(.page-number):not(.active) {
+    display: none;
+  }
+  
+  /* Show essential navigation buttons */
+  .pagination-btn:first-child,
+  .pagination-btn:nth-child(2),
+  .pagination-btn:nth-last-child(2),
+  .pagination-btn:last-child {
+    display: flex !important;
+  }
+  
+  .page-numbers {
+    gap: 2px;
+  }
+  
+  .ellipsis {
+    padding: 6px 2px;
+    font-size: 12px;
+  }
 }
 
-.loading-text {
-  color: #6c757d;
-  font-size: 16px;
-  margin: 0;
-  animation: pulse 2s ease-in-out infinite;
+@media (max-width: 360px) {
+  .pagination-container {
+    padding: 8px;
+  }
+  
+  .pagination-info {
+    font-size: 12px;
+  }
+  
+  .pagination-btn {
+    padding: 6px 4px;
+    min-width: 28px;
+    font-size: 11px;
+  }
+  
+  .page-numbers {
+    gap: 1px;
+  }
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
+/* Ensure skeleton loading styles are preserved */
 .skeleton-loading {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
