@@ -106,28 +106,12 @@
           »»
         </button>
       </div>
-      
-      <!-- Page Size Selector -->
-      <div class="page-size-controls">
-        <label for="page-size">Results per page:</label>
-        <select 
-          id="page-size" 
-          v-model="selectedPageSize" 
-          @change="handlePageSizeChange"
-          class="page-size-select"
-        >
-          <option value="10">10</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-        </select>
-      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, computed, ref, watch } from 'vue'
+import { defineComponent, PropType, computed } from 'vue'
 import HostElement from '@/components/HostElement.vue'
 import { PaginatedHosts } from '@/types'
 
@@ -161,11 +145,9 @@ export default defineComponent({
     }
   },
 
-  emits: ['page-change', 'page-size-change'],
+  emits: ['page-change'],
 
-  setup(props, { emit }) {
-    const selectedPageSize = ref(props.hosts.page_size || 50)
-
+  setup(props) {
     // Computed properties for pagination
     const totalPages = computed(() => Math.ceil((props.hosts?.count || 0) / (props.hosts?.page_size || 50)))
     const startResult = computed(() => {
@@ -208,26 +190,13 @@ export default defineComponent({
       return currentPage < total - 3
     })
 
-    const handlePageSizeChange = () => {
-      emit('page-size-change', parseInt(selectedPageSize.value.toString()))
-    }
-
-    // Watch for changes in hosts.page_size and update selectedPageSize
-    watch(() => props.hosts?.page_size, (newSize) => {
-      if (newSize) {
-        selectedPageSize.value = newSize
-      }
-    })
-
     return {
-      selectedPageSize,
       totalPages,
       startResult,
       endResult,
       visiblePageNumbers,
       showLeftEllipsis,
-      showRightEllipsis,
-      handlePageSizeChange
+      showRightEllipsis
     }
   }
 })
@@ -306,23 +275,6 @@ export default defineComponent({
   padding: 8px 4px;
   color: #6c757d;
   font-weight: 500;
-}
-
-.page-size-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #6c757d;
-}
-
-.page-size-select {
-  padding: 4px 8px;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  background-color: white;
-  font-size: 14px;
 }
 
 .loading-container {

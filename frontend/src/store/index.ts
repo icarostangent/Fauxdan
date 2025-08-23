@@ -21,7 +21,7 @@ export default createStore<RootState>({
       results: [],
       count: 0,
       page: 1,
-      page_size: 10,
+      page_size: 50,
       next: null,
       previous: null
     }
@@ -58,7 +58,7 @@ export default createStore<RootState>({
     },
     async searchHosts({ commit }, { query, page = 1 }: { query: string, page: number }) {
       try {
-        const response = await fetch(`${API_ENDPOINTS.search}/?q=${encodeURIComponent(query)}&page=${page}&size=${100}`)
+        const response = await fetch(`${API_ENDPOINTS.search}/?q=${encodeURIComponent(query)}&page=${page}`)
         if (!response.ok) {
           throw new Error('Network response was not ok')
         }

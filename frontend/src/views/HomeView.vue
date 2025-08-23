@@ -4,8 +4,8 @@
       <h3>API Access</h3>
       <p>You can also access this data directly via our API:</p>
       <ul>
-        <li><strong>All Hosts:</strong> <code>GET /api/hosts/?page=1&size=50</code></li>
-        <li><strong>Search Hosts:</strong> <code>GET /api/search/?q=YOUR_QUERY&page=1&size=50</code></li>
+        <li><strong>All Hosts:</strong> <code>GET /api/hosts/?page=1</code></li>
+        <li><strong>Search Hosts:</strong> <code>GET /api/search/?q=YOUR_QUERY&page=1</code></li>
         <li><strong>Host Details:</strong> <code>GET /api/hosts/HOST_ID/</code></li>
       </ul>
       <p><small>Replace <code>YOUR_QUERY</code> with your search term and <code>HOST_ID</code> with the actual host ID.</small></p>
@@ -20,7 +20,6 @@
       :loading="loading"
       :error="error"
       @page-change="handlePageChange"
-      @page-size-change="handlePageSizeChange"
     />
   </div>
 </template>
@@ -89,17 +88,6 @@ export default defineComponent({
       })
     }
 
-    const handlePageSizeChange = (newPageSize: number) => {
-      // Reset to first page when changing page size
-      router.push({
-        query: {
-          ...route.query,
-          page: '1',
-          size: newPageSize.toString()
-        }
-      })
-    }
-
     // Watch for URL parameter changes
     watch(
       () => route.query,
@@ -108,13 +96,12 @@ export default defineComponent({
         error.value = ''
         try {
           const page = query.page ? parseInt(query.page as string) : 1
-          const pageSize = query.size ? parseInt(query.size as string) : 50
           const searchQuery = query.q as string | undefined
 
           if (searchQuery) {
-            await store.dispatch('searchHosts', { query: searchQuery, page: page, size: pageSize })
+            await store.dispatch('searchHosts', { query: searchQuery, page: page })
           } else {
-            await store.dispatch('fetchHosts', { page, size: pageSize })
+            await store.dispatch('fetchHosts', { page })
           }
         } catch (err) {
           error.value = 'Failed to load hosts. Please try again.'
@@ -132,7 +119,6 @@ export default defineComponent({
       error,
       handleSearch,
       handlePageChange,
-      handlePageSizeChange,
       route // Expose route to template
     }
   }
