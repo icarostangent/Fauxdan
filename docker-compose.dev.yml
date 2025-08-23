@@ -91,8 +91,8 @@ services:
       - "443:443"
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile
-      - ./caddy/certs:/etc/caddy/certs
-      - ./caddy/data:/data
+      - caddy_certs:/etc/caddy/certs
+      - caddy_data:/data
     restart: unless-stopped
 
   tor:
@@ -107,4 +107,5 @@ volumes:
   db_data:
   redis_data:
   node_modules:
-  nginx_logs:
+  caddy_data:
+  caddy_certs:
