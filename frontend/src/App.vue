@@ -7,7 +7,7 @@
       </div>
       <div class="nav-links">
         <router-link to="/" exact>Home</router-link>
-        <router-link to="/about">About</router-link>
+        <router-link to="/hosts">Hosts</router-link>
       </div>
     </div>
   </nav>

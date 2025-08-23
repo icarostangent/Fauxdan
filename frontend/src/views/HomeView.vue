@@ -1,127 +1,81 @@
 <template>
   <div class="home">
-    <div class="api-info">
-      <h3>API Access</h3>
-      <p>You can also access this data directly via our API:</p>
-      <ul>
-        <li><strong>All Hosts:</strong> <code>GET /api/hosts/?page=1</code></li>
-        <li><strong>Search Hosts:</strong> <code>GET /api/search/?q=YOUR_QUERY&page=1</code></li>
-        <li><strong>Host Details:</strong> <code>GET /api/hosts/HOST_ID/</code></li>
-      </ul>
-      <p><small>Replace <code>YOUR_QUERY</code> with your search term and <code>HOST_ID</code> with the actual host ID.</small></p>
+    <div class="content-container">
+      <div class="about-header">
+        <h1>About Fauxdan</h1>
+        <p class="subtitle">Internet Intelligence & Network Discovery</p>
+      </div>
+
+      <div class="about-content">
+        <section class="about-section">
+          <h2>What We Do</h2>
+          <p>
+            Fauxdan is a comprehensive internet intelligence platform that provides real-time 
+            insights into network infrastructure, open ports, domain associations, and SSL certificate 
+            information. Our platform helps security researchers, network administrators, and 
+            cybersecurity professionals understand the digital landscape.
+          </p>
+        </section>
+
+        <section class="about-section">
+          <h2>Our Mission</h2>
+          <p>
+            To provide accurate, comprehensive, and accessible internet intelligence data that 
+            empowers organizations to make informed decisions about their network security and 
+            infrastructure management.
+          </p>
+        </section>
+
+        <section class="about-section">
+          <h2>Key Features</h2>
+          <div class="features-grid">
+            <div class="feature-card">
+              <h3>Host Discovery</h3>
+              <p>Comprehensive scanning and identification of network hosts with detailed port information.</p>
+            </div>
+            <div class="feature-card">
+              <h3>Port Analysis</h3>
+              <p>Detailed port scanning with protocol detection and service banner extraction.</p>
+            </div>
+            <div class="feature-card">
+              <h3>Domain Intelligence</h3>
+              <p>Domain-to-host mapping and source tracking for comprehensive network visibility.</p>
+            </div>
+            <div class="feature-card">
+              <h3>SSL Certificate Data</h3>
+              <p>Complete SSL certificate information including validity, issuer details, and fingerprints.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="about-section">
+          <h2>API Access</h2>
+          <p>
+            All our data is available through our RESTful API, allowing developers and researchers 
+            to integrate Fauxdan's intelligence into their own applications and workflows.
+          </p>
+          <div class="api-example">
+            <code>GET /api/hosts/?page=1&size=50</code>
+          </div>
+        </section>
+
+        <section class="about-section">
+          <h2>Contact</h2>
+          <p>
+            For questions, support, or partnership inquiries, please reach out to our team. 
+            We're committed to helping you leverage internet intelligence for better security outcomes.
+          </p>
+        </section>
+      </div>
     </div>
-    
-    <SearchBar 
-      :initial-value="route.query.q?.toString() || ''"
-      @search="handleSearch" 
-    />
-    <HostList 
-      :hosts="hosts"
-      :loading="loading"
-      :error="error"
-      @page-change="handlePageChange"
-    />
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent } from 'vue'
-import { useStore } from 'vuex'
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import HostList from '@/components/HostList.vue'
-import SearchBar from '@/components/SearchBar.vue'
 
 export default defineComponent({
-  name: 'HomeView',
-  
-  components: {
-    HostList,
-    SearchBar
-  },
-
-  setup() {
-    const store = useStore()
-    const route = useRoute()
-    const router = useRouter()
-    const loading = ref(false)
-    const error = ref('')
-    let searchTimeout: ReturnType<typeof setTimeout> | null = null
-
-    const hosts = computed(() => store.state.hosts)
-
-    const loadHosts = async (page?: number) => {
-      loading.value = true
-      error.value = ''
-      try {
-        await store.dispatch('fetchHosts', { page })
-      } catch (err) {
-        error.value = 'Failed to load hosts. Please try again.'
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const handleSearch = (query: string) => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout)
-      }
-
-      searchTimeout = setTimeout(() => {
-        // Update URL with search query
-        router.push({
-          query: {
-            ...route.query,
-            q: query || undefined,
-            page: undefined // Reset to first page on new search
-          }
-        })
-      }, 300) // Debounce search for 300ms
-    }
-
-    const handlePageChange = (page: number) => {
-      router.push({
-        query: {
-          ...route.query,
-          page: page.toString()
-        }
-      })
-    }
-
-    // Watch for URL parameter changes
-    watch(
-      () => route.query,
-      async (query) => {
-        loading.value = true
-        error.value = ''
-        try {
-          const page = query.page ? parseInt(query.page as string) : 1
-          const searchQuery = query.q as string | undefined
-
-          if (searchQuery) {
-            await store.dispatch('searchHosts', { query: searchQuery, page: page })
-          } else {
-            await store.dispatch('fetchHosts', { page })
-          }
-        } catch (err) {
-          error.value = 'Failed to load hosts. Please try again.'
-          console.error('Error loading hosts:', err)
-        } finally {
-          loading.value = false
-        }
-      },
-      { immediate: true }
-    )
-
-    return {
-      hosts,
-      loading,
-      error,
-      handleSearch,
-      handlePageChange,
-      route // Expose route to template
-    }
-  }
+  name: 'HomeView'
 })
 </script>
 
@@ -130,49 +84,126 @@ export default defineComponent({
   padding: 20px;
 }
 
-.api-info {
+.content-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.about-header {
+  text-align: center;
+  margin-bottom: 48px;
+  padding: 40px 0;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.about-header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+}
+
+.subtitle {
+  font-size: 18px;
+  color: #6c757d;
+  margin: 0;
+  font-weight: 400;
+}
+
+.about-content {
+  display: grid;
+  gap: 32px;
+}
+
+.about-section {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.about-section h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 8px;
+}
+
+.about-section p {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #495057;
+  margin: 0 0 16px 0;
+}
+
+.about-section p:last-child {
+  margin-bottom: 0;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.feature-card {
   background-color: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 20px;
-  margin-bottom: 24px;
-  text-align: left;
+  transition: all 0.2s ease;
 }
 
-.api-info h3 {
-  margin: 0 0 12px 0;
-  color: #495057;
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.feature-card h3 {
   font-size: 18px;
+  font-weight: 600;
+  color: #007bff;
+  margin: 0 0 12px 0;
 }
 
-.api-info p {
-  margin: 0 0 12px 0;
-  color: #6c757d;
+.feature-card p {
+  font-size: 14px;
   line-height: 1.5;
+  color: #6c757d;
+  margin: 0;
 }
 
-.api-info ul {
-  margin: 0 0 12px 0;
-  padding-left: 20px;
+.api-example {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 16px;
 }
 
-.api-info li {
-  margin-bottom: 8px;
-  color: #495057;
-  line-height: 1.4;
-}
-
-.api-info code {
-  background-color: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 4px;
+.api-example code {
   font-family: 'Courier New', monospace;
   font-size: 14px;
   color: #e83e8c;
+  background-color: #e9ecef;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
-.api-info small {
-  color: #6c757d;
-  font-size: 14px;
+@media (max-width: 768px) {
+  .about-header h1 {
+    font-size: 28px;
+  }
+  
+  .subtitle {
+    font-size: 16px;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
