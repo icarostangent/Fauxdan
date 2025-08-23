@@ -2,7 +2,7 @@
   <div class="home">
     <div class="content-container">
       <div class="about-header">
-        <h1>About Fauxdan</h1>
+        <h1>Fauxdan</h1>
         <p class="subtitle">Internet Intelligence & Network Discovery</p>
       </div>
 
