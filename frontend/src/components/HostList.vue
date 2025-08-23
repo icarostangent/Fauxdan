@@ -6,7 +6,20 @@
     </div>
 
     <div>
-      <div v-if="loading">Loading...</div>
+      <div v-if="loading" class="skeleton-loading">
+        <div class="skeleton-item" v-for="n in 6" :key="n">
+          <div class="skeleton-header">
+            <div class="skeleton-ip"></div>
+            <div class="skeleton-badge"></div>
+          </div>
+          <div class="skeleton-ports">
+            <div class="skeleton-port" v-for="p in 3" :key="p"></div>
+          </div>
+          <div class="skeleton-domains">
+            <div class="skeleton-domain" v-for="d in 2" :key="d"></div>
+          </div>
+        </div>
+      </div>
       
       <div v-else-if="error">Error: {{ error }}</div>
       
@@ -310,5 +323,108 @@ export default defineComponent({
   border-radius: 4px;
   background-color: white;
   font-size: 14px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-text {
+  color: #6c757d;
+  font-size: 16px;
+  margin: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.skeleton-loading {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.skeleton-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.skeleton-ip {
+  width: 120px;
+  height: 20px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.skeleton-badge {
+  width: 60px;
+  height: 16px;
+  background: #f3f4f6;
+  border-radius: 12px;
+}
+
+.skeleton-ports {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.skeleton-port {
+  width: 80px;
+  height: 24px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.skeleton-domains {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-domain {
+  width: 100%;
+  height: 16px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>
