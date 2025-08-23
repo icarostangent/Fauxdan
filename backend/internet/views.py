@@ -9,6 +9,9 @@ from internet.serializers import (
 )
 from django.core.management import call_command
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import ListAPIView
+from backend.pagination import PathOnlyPagination
 
 
 class ScanViewSet(viewsets.ModelViewSet):
@@ -121,39 +124,20 @@ class CreateScanView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class UniversalSearchView(APIView):
-    def get(self, request):
-        # Get search query from request
-        query = request.query_params.get('q', '')
-        
+class UniversalSearchView(ListAPIView):
+    serializer_class = HostSerializer
+    pagination_class = PathOnlyPagination
+    
+    def get_queryset(self):
+        query = self.request.query_params.get('q', '')
         if not query:
-            return Response({'error': 'No search query provided'}, status=400)
+            return Host.objects.none()
         
-        # List of models to search (you can customize this)
-        searchable_models = [
-            {'model': Host, 'serializer': HostSerializer, 'fields': ['ip', 'domains__name', 'ports__port_number', 'ports__proto']},
-        ]
+        # Build efficient database query
+        q_objects = Q()
+        q_objects |= Q(ip__icontains=query)
+        q_objects |= Q(domains__name__icontains=query)
+        q_objects |= Q(ports__port_number__icontains=query)
+        q_objects |= Q(ports__proto__icontains=query)
         
-        # Aggregate results
-        results = []
-        
-        for model_info in searchable_models:
-            # Construct Q objects for multiple search fields
-            q_objects = Q()
-            for field in model_info['fields']:
-                q_objects |= Q(**{f'{field}__icontains': query})
-            
-            # Perform search and filter unique objects
-            model_results = model_info['model'].objects.filter(q_objects).distinct()
-            
-            # Serialize results
-            serializer = model_info['serializer'](model_results, many=True)
-            results.extend(serializer.data)
-        
-        # Optional: Sort results
-        # results.sort(key=lambda x: x.get('title', '').lower())
-        
-        return Response({
-            'count': len(results),
-            'results': results
-        })
+        return Host.objects.filter(q_objects).distinct()
