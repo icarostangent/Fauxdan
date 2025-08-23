@@ -6,7 +6,8 @@
         <span class="brand-tagline">Not Shodan</span>
       </div>
       <div class="nav-links">
-        <router-link to="/">Home</router-link>
+        <router-link to="/" exact>Home</router-link>
+        <router-link to="/about">About</router-link>
       </div>
     </div>
   </nav>
