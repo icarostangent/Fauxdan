@@ -153,12 +153,25 @@ class UniversalSearchView(ListAPIView):
         if not query:
             return Host.objects.none()
         
-        # Build efficient database query
+        # More intelligent search logic
         q_objects = Q()
-        q_objects |= Q(ip__icontains=query)
-        q_objects |= Q(domains__name__icontains=query)
-        q_objects |= Q(ports__port_number__icontains=query)
-        q_objects |= Q(ports__proto__icontains=query)
+        
+        # IP address search (exact or partial)
+        if self._is_valid_ip(query):
+            q_objects |= Q(ip__icontains=query)
+        
+        # Domain search (only if it looks like a domain)
+        if '.' in query and not query.isdigit():
+            q_objects |= Q(domains__name__icontains=query)
+        
+        # Port search (only if it's a valid port number)
+        if query.isdigit() and 1 <= int(query) <= 65535:
+            # Use exact match instead of icontains for ports
+            q_objects |= Q(ports__port_number=int(query))
+        
+        # Protocol search (only if it's a valid protocol)
+        if query.lower() in ['tcp', 'udp']:
+            q_objects |= Q(ports__proto__iexact=query)
         
         # Add prefetch_related to prevent N+1 queries
         return Host.objects.filter(q_objects).prefetch_related(
@@ -166,3 +179,12 @@ class UniversalSearchView(ListAPIView):
             'domains', 
             'ssl_certificates'
         ).select_related('scan').distinct()
+    
+    def _is_valid_ip(self, query):
+        """Check if query looks like a valid IP address"""
+        import re
+        ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+        if re.match(ip_pattern, query):
+            parts = query.split('.')
+            return all(0 <= int(part) <= 255 for part in parts)
+        return False
