@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import BlogView from '@/views/BlogView.vue'
+import BlogDetailView from '@/views/BlogDetailView.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -16,6 +18,16 @@ const routes: Array<RouteRecordRaw> = [
     path: '/hosts',
     name: 'hosts',
     component: () => import(/* webpackChunkName: "hosts" */ '../views/HostsView.vue')
+  },
+  {
+    path: '/blog',
+    name: 'blog',
+    component: BlogView
+  },
+  {
+    path: '/blog/:id',
+    name: 'blog-detail',
+    component: BlogDetailView
   }
 ]
 

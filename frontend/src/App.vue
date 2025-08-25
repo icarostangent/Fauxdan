@@ -8,6 +8,7 @@
       <div class="nav-links">
         <router-link to="/" exact>Home</router-link>
         <router-link to="/hosts">Hosts</router-link>
+        <router-link to="/blog" class="nav-link">Blog</router-link>
       </div>
     </div>
   </nav>
