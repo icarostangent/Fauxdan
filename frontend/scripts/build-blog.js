@@ -25,6 +25,16 @@ function getMarkdownFiles() {
   }
 }
 
+// Function to generate slug from title
+function generateSlug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+}
+
 // Function to parse frontmatter and content
 function parseMarkdownFile(content, filename, sequentialId) {
   const parts = content.split('---')
@@ -56,8 +66,19 @@ function parseMarkdownFile(content, filename, sequentialId) {
       }
     })
     
-    // Generate sequential ID
-    const id = `post-${sequentialId}`
+    // Generate slug from title, with fallback to sequential ID
+    let id
+    if (metadata.title) {
+      id = generateSlug(metadata.title)
+      // Ensure uniqueness by adding sequential ID if needed
+      if (id === '') {
+        id = `${sequentialId}` // No prefix, just the number
+      }
+    } else {
+      id = `${sequentialId}` // No prefix, just the number
+    }
+    
+    console.log(`Generated slug for "${metadata.title}": ${id}`)
     
     // Calculate read time if not provided
     const readTime = metadata.readTime || Math.ceil(markdownContent.split(' ').length / 200)
@@ -74,13 +95,6 @@ function parseMarkdownFile(content, filename, sequentialId) {
       featured: metadata.featured || false,
       filename
     }
-    
-    console.log(`Post object:`, {
-      id: post.id,
-      title: post.title,
-      contentLength: post.content.length,
-      featured: post.featured
-    })
     
     return post
   } catch (error) {
@@ -169,9 +183,10 @@ export const blogData = {
       console.log(`   Total posts: ${posts.length}`)
       console.log(`   Featured post: ${featuredPost ? featuredPost.title : 'None (using date-based sorting)'}`)
       console.log(`   Date range: ${posts[posts.length - 1]?.date} to ${posts[0]?.date}`)
-      console.log('\n Post IDs:')
+      console.log('\n Post URLs:')
       posts.forEach((post, index) => {
-        console.log(`   ${index + 1}. ${post.title} (ID: ${post.id})`)
+        console.log(`   ${index + 1}. ${post.title}`)
+        console.log(`      URL: /blog/${post.id}`)
       })
     } else {
       console.log('\n⚠ No posts were processed successfully')
