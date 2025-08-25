@@ -135,6 +135,7 @@ export default defineComponent({
     })
     
     const viewPost = (postId: string) => {
+      console.log('Navigating to post:', postId) // Debug log
       router.push(`/blog/${postId}`)
     }
     
@@ -150,6 +151,9 @@ export default defineComponent({
       try {
         loading.value = true
         posts.value = await blogData.getPosts()
+        console.log('Loaded posts:', posts.value) // Debug log
+        console.log('Featured post:', featuredPost.value) // Debug log
+        console.log('All articles:', allArticles.value) // Debug log
       } catch (error) {
         console.error('Error loading blog posts:', error)
       } finally {

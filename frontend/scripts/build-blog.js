@@ -26,7 +26,7 @@ function getMarkdownFiles() {
 }
 
 // Function to parse frontmatter and content
-function parseMarkdownFile(content, filename) {
+function parseMarkdownFile(content, filename, sequentialId) {
   const parts = content.split('---')
   
   if (parts.length < 3) {
@@ -56,13 +56,13 @@ function parseMarkdownFile(content, filename) {
       }
     })
     
-    // Generate ID from filename
-    const id = filename.replace(/^\d{4}-\d{2}-\d{2}-/, '').replace('.md', '')
+    // Generate sequential ID
+    const id = `post-${sequentialId}`
     
     // Calculate read time if not provided
     const readTime = metadata.readTime || Math.ceil(markdownContent.split(' ').length / 200)
     
-    return {
+    const post = {
       id,
       title: metadata.title || 'Untitled',
       excerpt: metadata.excerpt || markdownContent.substring(0, 150) + '...',
@@ -74,6 +74,15 @@ function parseMarkdownFile(content, filename) {
       featured: metadata.featured || false,
       filename
     }
+    
+    console.log(`Post object:`, {
+      id: post.id,
+      title: post.title,
+      contentLength: post.content.length,
+      featured: post.featured
+    })
+    
+    return post
   } catch (error) {
     console.error(`Error parsing markdown for ${filename}:`, error)
     return null
@@ -89,12 +98,13 @@ function buildBlog() {
     const markdownFiles = getMarkdownFiles()
     const posts = []
     
-    // Process each markdown file
-    for (const filename of markdownFiles) {
+    // Process each markdown file with sequential IDs
+    for (let i = 0; i < markdownFiles.length; i++) {
+      const filename = markdownFiles[i]
       try {
         const filePath = path.join(markdownDir, filename)
         const content = fs.readFileSync(filePath, 'utf8')
-        const post = parseMarkdownFile(content, filename)
+        const post = parseMarkdownFile(content, filename, i + 1) // Sequential ID starting from 1
         
         if (post) {
           posts.push(post)
@@ -143,7 +153,7 @@ export const blogData = {
   },
   
   async getPost(id: string): Promise<BlogPost | null> {
-    return blogPosts.find(post => post.id === post.id) || null
+    return blogPosts.find(post => post.id === id) || null
   }
 }
 `
@@ -159,6 +169,10 @@ export const blogData = {
       console.log(`   Total posts: ${posts.length}`)
       console.log(`   Featured post: ${featuredPost ? featuredPost.title : 'None (using date-based sorting)'}`)
       console.log(`   Date range: ${posts[posts.length - 1]?.date} to ${posts[0]?.date}`)
+      console.log('\n Post IDs:')
+      posts.forEach((post, index) => {
+        console.log(`   ${index + 1}. ${post.title} (ID: ${post.id})`)
+      })
     } else {
       console.log('\n⚠ No posts were processed successfully')
     }
@@ -192,7 +206,7 @@ export const blogData = {
   },
   
   async getPost(id: string): Promise<BlogPost | null> {
-    return blogPosts.find(post => post.id === post.id) || null
+    return blogPosts.find(post => post.id === id) || null
   }
 }
 `
