@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
 
     'internet',
+    'analytics',
 ]
 
 if DEBUG:
@@ -134,9 +135,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 STATIC_ROOT = Path('/static')
+
+# Add static files finders configuration
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -146,9 +153,19 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Optionally, allow all origins (not recommended for production)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+    # Add CSRF trusted origins for development
+    CSRF_TRUSTED_ORIGINS = [
+        'https://dev2.icarostangent.lab',
+        'https://localhost',
+        'http://localhost',
+        'http://127.0.0.1',
+    ]
 else:
     CORS_ALLOWED_ORIGINS = [
         'http://fauxdan.io',
+    ]
+    CSRF_TRUSTED_ORIGINS = [
+        'https://fauxdan.io',
     ]
 
 REST_FRAMEWORK = {

@@ -1,4 +1,10 @@
 fauxdan.io, localhost {
+
+    # Handle analytics requests
+    handle /analytics/* {
+        reverse_proxy backend:8000
+    }
+
     # Handle API requests - must be first and most specific
     handle /api/* {
         reverse_proxy backend:8000
