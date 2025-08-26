@@ -41,6 +41,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'django_extensions',
+    'werkzeug',
+
     'rest_framework',
     'corsheaders',
     'django_filters',
@@ -50,12 +53,6 @@ INSTALLED_APPS = [
     'internet',
     'analytics',
 ]
-
-if DEBUG:
-    INSTALLED_APPS += [
-        'django_extensions',
-        'werkzeug',
-    ] 
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
