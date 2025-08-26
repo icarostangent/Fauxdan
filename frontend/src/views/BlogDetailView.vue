@@ -161,7 +161,8 @@ export default defineComponent({
   max-width: 800px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%);
+  color: #ffffff;
 }
 
 .loading, .error {
@@ -219,9 +220,10 @@ export default defineComponent({
   margin-bottom: 50px;
   text-align: center;
   padding: 40px 0;
-  background: white;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   margin: 0 -20px 50px -20px;
 }
 
@@ -229,12 +231,12 @@ export default defineComponent({
   font-size: 42px;
   font-weight: 800;
   margin: 0 0 30px 0;
-  color: #1a1a1a;
+  color: #ffffff;
   line-height: 1.2;
   max-width: 700px;
   margin-left: auto;
   margin-right: auto;
-  background: linear-gradient(135deg, #1a1a1a, #007bff);
+  background: linear-gradient(135deg, #ffffff, #007bff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -256,11 +258,12 @@ export default defineComponent({
 }
 
 .date, .read-time {
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.1);
   padding: 8px 16px;
   border-radius: 20px;
   font-weight: 500;
-  color: #495057;
+  color: #cccccc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .tags {
@@ -282,20 +285,22 @@ export default defineComponent({
 }
 
 .post-body {
-  background: white;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 40px;
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   margin-bottom: 40px;
   line-height: 1.8;
-  color: #333;
+  color: #ffffff;
 }
 
 .post-footer {
-  background: white;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 40px;
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
 
@@ -356,7 +361,8 @@ export default defineComponent({
 .markdown-content {
   font-size: 18px;
   line-height: 1.8;
-  color: #333;
+  color: #ffffff;
+  text-align: left;
 }
 
 .markdown-content h1,
@@ -366,7 +372,7 @@ export default defineComponent({
 .markdown-content h5,
 .markdown-content h6 {
   margin: 40px 0 20px 0;
-  color: #1a1a1a;
+  color: #ffffff;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -379,7 +385,7 @@ export default defineComponent({
 
 .markdown-content h2 { 
   font-size: 28px; 
-  border-bottom: 2px solid #e9ecef;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
   padding-bottom: 8px;
 }
 
@@ -390,22 +396,22 @@ export default defineComponent({
 
 .markdown-content h4 { 
   font-size: 20px; 
-  color: #495057;
+  color: #cccccc;
 }
 
 .markdown-content h5 { 
   font-size: 18px; 
-  color: #6c757d;
+  color: #999999;
 }
 
 .markdown-content h6 { 
   font-size: 16px; 
-  color: #6c757d;
+  color: #999999;
 }
 
 .markdown-content p {
   margin: 0 0 25px 0;
-  text-align: justify;
+  text-align: left; /* Change from justify to left */
 }
 
 .markdown-content ul,
@@ -423,11 +429,12 @@ export default defineComponent({
   border-left: 4px solid #007bff;
   margin: 30px 0;
   padding: 20px 30px;
-  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 0 8px 8px 0;
   font-style: italic;
   font-size: 18px;
-  color: #495057;
+  color: #cccccc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .markdown-content blockquote::before {
@@ -439,32 +446,83 @@ export default defineComponent({
 }
 
 .markdown-content code {
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.1);
   padding: 4px 8px;
   border-radius: 6px;
   font-family: 'Courier New', monospace;
-  color: #e83e8c;
+  color: #00d4aa;
   font-size: 16px;
-  border: 1px solid #e9ecef;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: inline-block;
+  vertical-align: baseline;
 }
 
 .markdown-content pre {
-  background: #2d3748;
+  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
   color: #e2e8f0;
   padding: 25px;
   border-radius: 12px;
-  overflow-x: auto;
+  overflow-x: scroll;
+  overflow-y: hidden;
   margin: 30px 0;
-  border: 1px solid #4a5568;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  text-align: left;
+  position: relative;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+  word-wrap: normal;
+  min-width: 100%;
+}
+
+.markdown-content pre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #007bff, #8a2be2, #00d4aa);
+  border-radius: 12px 12px 0 0;
 }
 
 .markdown-content pre code {
   background: none;
   padding: 0;
   color: inherit;
-  font-size: 16px;
+  font-size: 14px;
   border: none;
+  display: block;
+  white-space: pre;
+}
+
+/* Custom scrollbar for code blocks */
+.markdown-content pre::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.markdown-content pre::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.markdown-content pre::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #007bff, #8a2be2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.markdown-content pre::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #0056b3, #7b1fa2);
+}
+
+/* Firefox scrollbar */
+.markdown-content pre {
+  scrollbar-width: thin;
+  scrollbar-color: #007bff rgba(255, 255, 255, 0.1);
 }
 
 .markdown-content a {
@@ -476,6 +534,7 @@ export default defineComponent({
 
 .markdown-content a:hover {
   border-bottom-color: #007bff;
+  color: #00d4aa;
 }
 
 .markdown-content img {
@@ -490,15 +549,16 @@ export default defineComponent({
   width: 100%;
   border-collapse: collapse;
   margin: 30px 0;
-  background: white;
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .markdown-content th,
 .markdown-content td {
-  border: 1px solid #e9ecef;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 15px;
   text-align: left;
 }
@@ -512,16 +572,16 @@ export default defineComponent({
 }
 
 .markdown-content tr:nth-child(even) {
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .markdown-content tr:hover {
-  background: #e9ecef;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .markdown-content hr {
   border: none;
-  border-top: 3px solid #e9ecef;
+  border-top: 3px solid rgba(255, 255, 255, 0.2);
   margin: 40px 0;
   border-radius: 2px;
 }
@@ -533,7 +593,7 @@ export default defineComponent({
   color: #007bff;
   font-size: 20px;
   margin-top: -12px;
-  background: white;
+  background: #1a1a1a;
   width: 40px;
   margin-left: auto;
   margin-right: auto;

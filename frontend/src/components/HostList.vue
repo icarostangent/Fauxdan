@@ -280,6 +280,74 @@ export default defineComponent({
   font-weight: 500;
 }
 
+/* Skeleton loading styles */
+.skeleton-loading {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.skeleton-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.skeleton-ip {
+  width: 120px;
+  height: 20px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.skeleton-badge {
+  width: 60px;
+  height: 16px;
+  background: #f3f4f6;
+  border-radius: 12px;
+}
+
+.skeleton-ports {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.skeleton-port {
+  width: 80px;
+  height: 24px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.skeleton-domains {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-domain {
+  width: 100%;
+  height: 16px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* Responsive adjustments for small screens */
 @media (max-width: 768px) {
   .pagination-container {
@@ -368,73 +436,5 @@ export default defineComponent({
   .page-numbers {
     gap: 1px;
   }
-}
-
-/* Ensure skeleton loading styles are preserved */
-.skeleton-loading {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.skeleton-item {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.skeleton-ip {
-  width: 120px;
-  height: 20px;
-  background: #f3f4f6;
-  border-radius: 4px;
-}
-
-.skeleton-badge {
-  width: 60px;
-  height: 16px;
-  background: #f3f4f6;
-  border-radius: 12px;
-}
-
-.skeleton-ports {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.skeleton-port {
-  width: 80px;
-  height: 24px;
-  background: #f3f4f6;
-  border-radius: 4px;
-}
-
-.skeleton-domains {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-domain {
-  width: 100%;
-  height: 16px;
-  background: #f3f4f6;
-  border-radius: 4px;
-}
-
-@keyframes skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 </style>

@@ -274,13 +274,18 @@ export default defineComponent({
 }
 
 .content-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 80px 20px;
+  width: 100%;
+  margin: 0;
+  padding: 80px 0;
 }
 
-.exclusive-section {
-  margin-bottom: 100px;
+.exclusive-section,
+.api-section,
+.exclusivity-section,
+.cta-section {
+  max-width: 1200px;
+  margin: 0 auto 100px auto;
+  padding: 0 20px;
 }
 
 .exclusive-section h2 {
@@ -342,10 +347,6 @@ export default defineComponent({
   line-height: 1.6;
   color: #aaaaaa;
   margin: 0;
-}
-
-.api-section {
-  margin-bottom: 100px;
 }
 
 .api-section h2 {
@@ -416,10 +417,6 @@ export default defineComponent({
   font-size: 14px;
   color: #aaaaaa;
   min-width: 120px;
-}
-
-.exclusivity-section {
-  margin-bottom: 100px;
 }
 
 .exclusivity-section h2 {
