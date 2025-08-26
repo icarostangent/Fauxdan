@@ -140,7 +140,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-STATIC_ROOT = Path('/static')
+STATIC_ROOT = Path('/app/staticfiles')
 
 # Add static files finders configuration
 STATICFILES_FINDERS = [

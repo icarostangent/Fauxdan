@@ -94,6 +94,7 @@ services:
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile
       - ./static:/static
+      - ./backend/staticfiles:/staticfiles
       - caddy_certs:/etc/caddy/certs
       - caddy_data:/data
     restart: unless-stopped

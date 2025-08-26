@@ -3,7 +3,7 @@ services:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
     restart: unless-stopped
     volumes:
-      - static:/static
+      - staticfiles:/app/staticfiles
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DB_NAME=${DJANGO_DB_NAME}
@@ -29,13 +29,14 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_logs:/var/log/caddy
+      - staticfiles:/staticfiles
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
     restart: unless-stopped
   
 volumes:
-  static:
+  staticfiles:
   redis_data:
   caddy_data:
   caddy_logs:

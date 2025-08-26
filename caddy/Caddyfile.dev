@@ -30,11 +30,10 @@ localhost, dev2.icarostangent.lab {
         reverse_proxy backend:8000
     }
 
-    # Handle static files - more explicit configuration
-    handle /static/* {
-        root * /static
+    # Handle static files - strip /static prefix and serve from staticfiles
+    handle_path /static/* {
+        root * /staticfiles
         file_server
-        try_files {path}
     }
 
     # Handle frontend requests - only for non-API, non-static paths

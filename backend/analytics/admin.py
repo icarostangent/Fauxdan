@@ -35,7 +35,9 @@ class VisitorAdmin(ImportExportModelAdmin):
         if sessions.exists():
             device_types = set(s.device_type for s in sessions)
             browsers = set(s.browser for s in sessions)
-            return f"{', '.join(device_types)} | {', '.join(browsers[:2])}"
+            # Convert set to list before slicing
+            browser_list = list(browsers)
+            return f"{', '.join(device_types)} | {', '.join(browser_list[:2])}"
         return "No sessions"
     get_device_info.short_description = "Device Info"
     

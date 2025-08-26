@@ -10,9 +10,9 @@ fauxdan.io, localhost {
         reverse_proxy backend:8000
     }
 
-    # Handle static files
-    handle /static/* {
-        root * /static
+    # Handle static files - strip /static prefix and serve from staticfiles
+    handle_path /static/* {
+        root * /staticfiles
         file_server
     }
 
