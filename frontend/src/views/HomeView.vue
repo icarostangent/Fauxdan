@@ -123,21 +123,47 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'HomeView',
   
   setup() {
     const router = useRouter()
+    const hasTracked = ref(false) // Prevent multiple tracking calls
+    
+    onMounted(() => {
+      // Only track once per component mount
+      if (!hasTracked.value) {
+        analytics.trackPageView('/home')
+        analytics.trackEvent({
+          event: 'hero_view',
+          category: 'engagement',
+          action: 'hero_section_view'
+        })
+        hasTracked.value = true
+      }
+    })
     
     const navigateToSearch = () => {
+      analytics.trackEvent({
+        event: 'cta_click',
+        category: 'conversion',
+        action: 'search_button_click',
+        label: 'Start Searching'
+      })
       router.push('/hosts')
     }
     
     const navigateToAPI = () => {
-      // Navigate to API docs or search page
+      analytics.trackEvent({
+        event: 'cta_click',
+        category: 'conversion',
+        action: 'api_button_click',
+        label: 'API Documentation'
+      })
       router.push('/hosts')
     }
     

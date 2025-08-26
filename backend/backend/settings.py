@@ -32,6 +32,8 @@ ALLOWED_HOSTS = ['*',]
 # Application definition
 
 INSTALLED_APPS = [
+    'admin_interface',
+    'colorfield',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -43,8 +45,10 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'rest_framework_simplejwt',
+    'import_export',
 
     'internet',
+    'analytics',
 ]
 
 if DEBUG:
@@ -69,7 +73,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'analytics' / 'templates'],  # Add this line
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -134,9 +138,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
-STATIC_ROOT = Path('/static')
+STATIC_ROOT = Path('/app/staticfiles')
+
+# Add static files finders configuration
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -146,9 +156,19 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Optionally, allow all origins (not recommended for production)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+    # Add CSRF trusted origins for development
+    CSRF_TRUSTED_ORIGINS = [
+        'https://dev2.icarostangent.lab',
+        'https://localhost',
+        'http://localhost',
+        'http://127.0.0.1',
+    ]
 else:
     CORS_ALLOWED_ORIGINS = [
         'http://fauxdan.io',
+    ]
+    CSRF_TRUSTED_ORIGINS = [
+        'https://fauxdan.io',
     ]
 
 REST_FRAMEWORK = {
@@ -173,3 +193,39 @@ REDIS_QUEUE_SSL_SCANNER = os.getenv('REDIS_QUEUE_SSL_SCANNER', 'queue_ssl_scanne
 REDIS_BATCH_SIZE = os.getenv('REDIS_BATCH_SIZE', 1000)
 
 MASSCAN_RATE = os.getenv('MASSCAN_RATE', 7500)
+
+# Admin Interface Configuration
+# Remove the jet configuration since we're not using it
+# JET_DEFAULT_THEME = 'light-gray'
+# JET_SIDE_MENU_COMPACT = True
+# JET_CHANGE_FORM_SIBLING_LINKS = True
+
+# Admin Interface Theme
+ADMIN_INTERFACE_CONFIG = {
+    'show_title': True,
+    'show_footer': True,
+    'show_breadcrumbs': True,
+    'show_sidebar': True,
+    'show_search': True,
+    'show_full_result_count': True,
+    'show_missing': True,
+    'show_save': True,
+    'show_save_and_continue_editing': True,
+    'show_save_and_add_another': True,
+    'show_delete': True,
+    'show_delete_selected': True,
+    'show_history': True,
+    'show_view_on_site': True,
+    'show_related_objects': True,
+    'show_related_objects_add': True,
+    'show_related_objects_change': True,
+    'show_related_objects_delete': True,
+    'show_related_objects_view': True,
+    'show_related_objects_history': True,
+    'show_related_objects_permissions': True,
+    'show_related_objects_add_permissions': True,
+    'show_related_objects_change_permissions': True,
+    'show_related_objects_delete_permissions': True,
+    'show_related_objects_view_permissions': True,
+    'show_related_objects_history_permissions': True,
+}

@@ -22,6 +22,7 @@ services:
       - ./backend:/app 
       - ./static:/static
     environment:
+      - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DB_NAME=${DJANGO_DB_NAME}
       - DJANGO_DB_USER=${DJANGO_DB_USER}
@@ -42,6 +43,7 @@ services:
       - ./backend:/app 
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=True
       - DJANGO_DB_NAME=${DJANGO_DB_NAME}
       - DJANGO_DB_USER=${DJANGO_DB_USER}
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
@@ -91,6 +93,8 @@ services:
       - "443:443"
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile
+      - ./static:/static
+      - ./backend/staticfiles:/staticfiles
       - caddy_certs:/etc/caddy/certs
       - caddy_data:/data
     restart: unless-stopped

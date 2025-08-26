@@ -1,6 +1,7 @@
 .env.dev
 .env.prod
 static
+backend/staticfiles
 celerybeat-schedule
 paused.conf
 backend/masscan/output

@@ -11,14 +11,28 @@ localhost, dev2.icarostangent.lab {
     # Force self-signed certificate
     tls internal
 
+    # Handle django admin requests - more specific to avoid conflicts
+    handle /admin {
+        reverse_proxy backend:8000
+    }
+    
+    handle /admin/* {
+        reverse_proxy backend:8000
+    }
+
+    # Handle analytics requests
+    handle /analytics/* {
+        reverse_proxy backend:8000
+    }
+
     # Handle API requests
     handle /api/* {
         reverse_proxy backend:8000
     }
 
-    # Handle static files
-    handle /static/* {
-        root * /static
+    # Handle static files - strip /static prefix and serve from staticfiles
+    handle_path /static/* {
+        root * /staticfiles
         file_server
     }
 
