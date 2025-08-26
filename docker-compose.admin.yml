@@ -1,11 +1,18 @@
+# This is the docker-compose file for the admin interface.
+# It is used to run the admin interface in development mode.
+# It is not used in production, but used with production environment variables.
+# Connects to live database.
+
 services:
   backend:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.backend
     restart: unless-stopped
     volumes:
       - staticfiles:/app/staticfiles
     environment:
-      - DJANGO_DEBUG=False
+      - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DB_NAME=${DJANGO_DB_NAME}
       - DJANGO_DB_USER=${DJANGO_DB_USER}
@@ -20,14 +27,10 @@ services:
       retries: 3
       start_period: 40s
 
-  redis:
-    image: redis:alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
   caddy:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     ports:
       - "80:80"
@@ -41,13 +44,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-
-  tor:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
-    restart: unless-stopped
   
 volumes:
   staticfiles:
-  redis_data:
   caddy_data:
   caddy_logs:

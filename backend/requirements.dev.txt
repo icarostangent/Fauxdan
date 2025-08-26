@@ -1,3 +1,0 @@
-django-extensions==3.2.3
-ipython==8.27.0
-Werkzeug==3.0.4
