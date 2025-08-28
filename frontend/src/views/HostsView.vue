@@ -38,13 +38,13 @@ export default defineComponent({
     let searchTimeout: ReturnType<typeof setTimeout> | null = null
     
     // Get the global loading setter from parent
-    const setGlobalLoading = inject('setGlobalLoading')
+    const setGlobalLoading = inject('setGlobalLoading') as ((loading: boolean) => void) | undefined
 
     const hosts = computed(() => store.state.hosts)
 
     const loadHosts = async (page?: number) => {
       loading.value = true
-      setGlobalLoading(true)
+      setGlobalLoading?.(true)
       error.value = ''
       try {
         await store.dispatch('fetchHosts', { page })
@@ -52,7 +52,7 @@ export default defineComponent({
         error.value = 'Failed to load hosts. Please try again.'
       } finally {
         loading.value = false
-        setGlobalLoading(false)
+        setGlobalLoading?.(false)
       }
     }
 
@@ -87,7 +87,7 @@ export default defineComponent({
       () => route.query,
       async (query) => {
         loading.value = true
-        setGlobalLoading(true)
+        setGlobalLoading?.(true)
         error.value = ''
         try {
           const page = query.page ? parseInt(query.page as string) : 1
@@ -103,7 +103,7 @@ export default defineComponent({
           console.error('Error loading hosts:', err)
         } finally {
           loading.value = false
-          setGlobalLoading(false)
+          setGlobalLoading?.(false)
         }
       },
       { immediate: true }
