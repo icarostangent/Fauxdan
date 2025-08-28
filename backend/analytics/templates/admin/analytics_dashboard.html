@@ -131,6 +131,17 @@
     <!-- Popular Pages -->
     <div class="chart-container">
         <div class="chart-title">📈 Most Popular Pages</div>
+        
+        <!-- Debug info -->
+        {% if debug %}
+        <div style="background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 12px;">
+            <strong>Debug Info:</strong><br>
+            Total PageViews: {{ total_page_views }}<br>
+            Popular Pages Count: {{ popular_pages|length }}<br>
+            Date Range: {{ start_date|date:"Y-m-d" }} to {{ end_date|date:"Y-m-d" }}
+        </div>
+        {% endif %}
+        
         <table class="data-table">
             <thead>
                 <tr>
@@ -140,13 +151,22 @@
                 </tr>
             </thead>
             <tbody>
-                {% for page in popular_pages %}
-                <tr>
-                    <td><code>{{ page.url|truncatechars:50 }}</code></td>
-                    <td>{{ page.title|default:"No title"|truncatechars:60 }}</td>
-                    <td><span class="metric-highlight">{{ page.view_count }}</span></td>
-                </tr>
-                {% endfor %}
+                {% if popular_pages %}
+                    {% for page in popular_pages %}
+                    <tr>
+                        <td><code>{{ page.url|truncatechars:50 }}</code></td>
+                        <td>{{ page.title|default:"No title"|truncatechars:60 }}</td>
+                        <td><span class="metric-highlight">{{ page.view_count }}</span></td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #666; padding: 20px;">
+                            <em>No page views found in the last 30 days.</em><br>
+                            <small>This could mean the analytics middleware isn't running or no pages have been visited.</small>
+                        </td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>

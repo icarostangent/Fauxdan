@@ -93,11 +93,27 @@ class AnalyticsMiddleware(MiddlewareMixin):
             
             # Track page view
             if request.method == 'GET' and not request.path.startswith('/api/'):
-                PageView.objects.create(
-                    session=request.analytics_session,
-                    url=request.build_absolute_uri(),
-                    title=getattr(response, 'title', 'Unknown'),
-                    referrer=request.META.get('HTTP_REFERER'),
-                )
+                try:
+                    # Try to get title from response
+                    title = 'Unknown'
+                    if hasattr(response, 'context_data') and response.context_data:
+                        title = response.context_data.get('title', 'Unknown')
+                    elif hasattr(response, 'title'):
+                        title = response.title
+                    elif hasattr(response, 'context') and response.context:
+                        title = response.context.get('title', 'Unknown')
+                    
+                    # Create page view with better title extraction
+                    page_view = PageView.objects.create(
+                        session=request.analytics_session,
+                        url=request.build_absolute_uri(),
+                        title=title,
+                        referrer=request.META.get('HTTP_REFERER'),
+                    )
+                    logger.debug(f"Created page view: {page_view.id} for {request.path} with title: {title}")
+                except Exception as e:
+                    logger.error(f"Error creating page view for {request.path}: {str(e)}")
+        else:
+            logger.debug(f"No analytics session found for {request.path}")
         
         return response

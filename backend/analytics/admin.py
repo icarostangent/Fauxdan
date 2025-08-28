@@ -163,9 +163,26 @@ class AnalyticsDashboardAdmin(admin.ModelAdmin):
         
         # Page view statistics
         total_page_views = PageView.objects.count()
-        popular_pages = PageView.objects.values('url', 'title').annotate(
+        
+        # Debug: Check all PageViews and recent ones
+        print(f"Debug: Total PageViews in database: {total_page_views}")
+        
+        # Check recent PageViews
+        recent_pageviews = PageView.objects.order_by('-timestamp')[:5]
+        print(f"Debug: Recent PageViews:")
+        for pv in recent_pageviews:
+            print(f"  - {pv.url} ({pv.title}) at {pv.timestamp}")
+        
+        popular_pages = PageView.objects.filter(
+            timestamp__gte=start_date
+        ).values('url', 'title').annotate(
             view_count=Count('id')
         ).order_by('-view_count')[:10]
+        
+        # Debug: Log the popular pages query
+        print(f"Debug: Found {popular_pages.count()} popular pages in last 30 days")
+        for page in popular_pages:
+            print(f"Debug: {page['url']} - {page['view_count']} views")
         
         # Device statistics
         device_stats = Session.objects.values('device_type').annotate(
@@ -193,6 +210,7 @@ class AnalyticsDashboardAdmin(admin.ModelAdmin):
             'browser_stats': browser_stats,
             'start_date': start_date,
             'end_date': end_date,
+            'debug': True,  # Enable debug mode
         })
         
         return super().changelist_view(request, extra_context)
