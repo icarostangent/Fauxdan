@@ -88,7 +88,7 @@ def get_session_stats():
     total_sessions = Session.objects.count()
     active_sessions = Session.objects.filter(end_time__isnull=True).count()
     closed_sessions = total_sessions - active_sessions
-    sessions_with_duration = Session.objects.filter(duration__isnot=None).count()
+    sessions_with_duration = Session.objects.filter(duration__isnull=False).count()
     
     return {
         'total_sessions': total_sessions,

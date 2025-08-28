@@ -71,6 +71,7 @@ import { defineComponent, ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { blogData, BlogPost } from '@/data/blogData'
 import { marked } from 'marked'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'BlogDetailView',

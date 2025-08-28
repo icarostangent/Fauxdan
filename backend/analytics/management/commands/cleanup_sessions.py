@@ -52,7 +52,7 @@ class Command(BaseCommand):
         
         # Find sessions with missing durations
         sessions_without_duration = Session.objects.filter(
-            end_time__isnot=None,
+            end_time__isnull=False,
             duration__isnull=True
         )
         self.stdout.write(f'Found {sessions_without_duration.count()} sessions with missing durations')
@@ -113,7 +113,7 @@ class Command(BaseCommand):
         # Show current stats
         active_sessions = Session.objects.filter(end_time__isnull=True).count()
         total_sessions = Session.objects.count()
-        sessions_with_duration = Session.objects.filter(duration__isnot=None).count()
+        sessions_with_duration = Session.objects.filter(duration__isnull=False).count()
         
         self.stdout.write(f'\nCurrent session statistics:')
         self.stdout.write(f'  Active sessions: {active_sessions}')

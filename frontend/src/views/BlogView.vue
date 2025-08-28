@@ -110,6 +110,7 @@
 import { defineComponent, ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { blogData, BlogPost } from '@/data/blogData'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'BlogView',

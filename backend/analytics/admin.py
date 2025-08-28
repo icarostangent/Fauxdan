@@ -87,7 +87,7 @@ class SessionAdmin(ImportExportModelAdmin):
     def calculate_durations(self, request, queryset):
         """Admin action to calculate durations for closed sessions"""
         sessions_without_duration = queryset.filter(
-            end_time__isnot=None,
+            end_time__isnull=False,
             duration__isnull=True
         )
         calculated_count = 0

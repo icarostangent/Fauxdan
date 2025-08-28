@@ -23,11 +23,12 @@
 <script lang="ts">
 import { defineComponent, inject } from 'vue'
 import { useStore } from 'vuex'
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HostList from '@/components/HostList.vue'
 import SearchBar from '@/components/SearchBar.vue'
 import PortMetrics from '@/components/PortMetrics.vue'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'AboutView',
@@ -94,7 +95,7 @@ export default defineComponent({
     // Watch for URL parameter changes
     watch(
       () => route.query,
-      async (query) => {
+      async (query: Record<string, any>) => {
         loading.value = true
         setGlobalLoading?.(true)
         error.value = ''

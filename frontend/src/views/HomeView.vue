@@ -125,6 +125,7 @@
 <script lang="ts">
 import { defineComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'HomeView',
@@ -133,17 +134,29 @@ export default defineComponent({
     const router = useRouter()
     
     onMounted(() => {
-      // Analytics tracking is now handled by backend middleware
-      // No need for frontend tracking calls
+      // Track page view when component mounts
+      analytics.trackPageView('/home')
     })
     
     const navigateToSearch = () => {
-      // Analytics tracking is now handled by backend middleware
+      // Track navigation event
+      analytics.trackEvent({
+        event: 'navigation',
+        category: 'user_interaction',
+        action: 'navigate_to_search',
+        label: 'hosts_page'
+      })
       router.push('/hosts')
     }
     
     const navigateToAPI = () => {
-      // Analytics tracking is now handled by backend middleware
+      // Track navigation event
+      analytics.trackEvent({
+        event: 'navigation',
+        category: 'user_interaction',
+        action: 'navigate_to_api',
+        label: 'api_page'
+      })
       router.push('/api')
     }
     

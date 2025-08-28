@@ -203,6 +203,7 @@ import { defineComponent, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Host } from '@/types'
 import { formatLastSeen, formatDate, formatPortDate } from '@/utils/date'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'HostDetailView',
@@ -230,6 +231,8 @@ export default defineComponent({
     }
 
     onMounted(() => {
+      // Track page view when component mounts
+      analytics.trackPageView(`/hosts/${route.params.id}`)
       loadHost()
     })
 

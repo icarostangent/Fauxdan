@@ -352,12 +352,18 @@ GET /api/search/?q=tcp</pre>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, onMounted } from 'vue'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'ApiView',
   components: {},
   setup() {
+    onMounted(() => {
+      // Track page view when component mounts
+      analytics.trackPageView('/api')
+    })
+    
     return {}
   }
 })
