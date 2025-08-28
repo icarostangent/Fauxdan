@@ -9,6 +9,7 @@
         <router-link to="/" exact>Home</router-link>
         <router-link to="/hosts">Hosts</router-link>
         <router-link to="/blog" class="nav-link">Blog</router-link>
+        <router-link to="/api">API</router-link>
       </div>
     </div>
   </nav>

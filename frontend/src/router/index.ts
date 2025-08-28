@@ -28,6 +28,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/blog/:id',
     name: 'blog-detail',
     component: BlogDetailView
+  },
+  {
+    path: '/api',
+    name: 'api',
+    component: () => import(/* webpackChunkName: "api" */ '../views/ApiView.vue')
   }
 ]
 

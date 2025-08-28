@@ -164,7 +164,7 @@ export default defineComponent({
         action: 'api_button_click',
         label: 'API Documentation'
       })
-      router.push('/hosts')
+      router.push('/api')
     }
     
     return {

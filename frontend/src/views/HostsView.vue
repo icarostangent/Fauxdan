@@ -1,16 +1,5 @@
 <template>
   <div class="about">
-    <div class="api-info">
-      <h3>API Access</h3>
-      <p>You can also access this data directly via our API:</p>
-      <ul>
-        <li><strong>All Hosts:</strong> <code>GET /api/hosts/?page=1</code></li>
-        <li><strong>Search Hosts:</strong> <code>GET /api/search/?q=YOUR_QUERY&page=1</code></li>
-        <li><strong>Host Details:</strong> <code>GET /api/hosts/HOST_ID/</code></li>
-      </ul>
-      <p><small>Replace <code>YOUR_QUERY</code> with your search term and <code>HOST_ID</code> with the actual host ID.</small></p>
-    </div>
-    
     <SearchBar 
       :initial-value="route.query.q?.toString() || ''"
       @search="handleSearch" 
@@ -130,49 +119,5 @@ export default defineComponent({
   padding: 20px;
 }
 
-.api-info {
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 24px;
-  text-align: left;
-}
 
-.api-info h3 {
-  margin: 0 0 12px 0;
-  color: #495057;
-  font-size: 18px;
-}
-
-.api-info p {
-  margin: 0 0 12px 0;
-  color: #6c757d;
-  line-height: 1.5;
-}
-
-.api-info ul {
-  margin: 0 0 12px 0;
-  padding-left: 20px;
-}
-
-.api-info li {
-  margin-bottom: 8px;
-  color: #495057;
-  line-height: 1.4;
-}
-
-.api-info code {
-  background-color: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  color: #e83e8c;
-}
-
-.api-info small {
-  color: #6c757d;
-  font-size: 14px;
-}
 </style>

@@ -12,8 +12,10 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-class AnalyticsViewSet(viewsets.ViewSet):
+class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
     
     @action(detail=False, methods=['post'])
     def events(self, request):

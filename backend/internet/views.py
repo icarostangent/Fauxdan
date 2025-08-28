@@ -9,32 +9,29 @@ from internet.serializers import (
 )
 from django.core.management import call_command
 from rest_framework import status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import ListAPIView
 from backend.pagination import PathOnlyPagination
-import time
-from django.db import connection
 
 
-class ScanViewSet(viewsets.ModelViewSet):
+class ScanViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Scan.objects.all()
     serializer_class = ScanSerializer
     filterset_fields = []
 
 
-class PortViewSet(viewsets.ModelViewSet):
+class PortViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Port.objects.all()
     serializer_class = PortSerializer
     filterset_fields = ['port_number', 'proto']
 
 
-class DomainViewSet(viewsets.ModelViewSet):
+class DomainViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Domain.objects.all()
     serializer_class = DomainSerializer
     filterset_fields = ['name',]
 
 
-class HostViewSet(viewsets.ModelViewSet):
+class HostViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Host.objects.prefetch_related(
         'ports',
         'domains', 
@@ -44,27 +41,20 @@ class HostViewSet(viewsets.ModelViewSet):
     filterset_fields = ['ip', 'domains__name']
     
     def list(self, request, *args, **kwargs):
-        start_time = time.time()
         try:
             response = super().list(request, *args, **kwargs)
-            end_time = time.time()
-            print(f"✅ HostViewSet.list took {end_time - start_time:.2f} seconds")
-            print(f"✅ Database queries: {len(connection.queries)}")
             return response
         except Exception as e:
-            end_time = time.time()
-            print(f"❌ HostViewSet.list FAILED after {end_time - start_time:.2f} seconds")
-            print(f"❌ Error: {str(e)}")
             raise
 
 
-class ProxyViewSet(viewsets.ModelViewSet):
+class ProxyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Proxy.objects.all()
     serializer_class = ProxySerializer
     filterset_fields = ['host_name', 'port_number', 'proxy_type', 'enabled', 'dead']
 
 
-class DNSRelayViewSet(viewsets.ModelViewSet):
+class DNSRelayViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DNSRelay.objects.all()
     serializer_class = DNSRelaySerializer
     # filterset_fields = ['port',]
