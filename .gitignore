@@ -4,4 +4,4 @@ static
 backend/staticfiles
 celerybeat-schedule
 paused.conf
-backend/masscan/output
+backend/masscan/output.venv
