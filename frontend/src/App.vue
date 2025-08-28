@@ -12,10 +12,34 @@
         <router-link to="/api">API</router-link>
       </div>
     </div>
+    <!-- Animated Loading Bar -->
+    <div class="loading-bar" :class="{ 'loading': isLoading }">
+      <div class="loading-progress"></div>
+    </div>
   </nav>
   <div class="nav-spacer"></div>
   <router-view/>
 </template>
+
+<script>
+import { ref, provide, onMounted } from 'vue'
+
+export default {
+  name: 'App',
+  setup() {
+    const isLoading = ref(false)
+    
+    // Provide loading state to child components
+    provide('setGlobalLoading', (loading) => {
+      isLoading.value = loading
+    })
+    
+    return {
+      isLoading
+    }
+  }
+}
+</script>
 
 <style>
 #app {
@@ -96,5 +120,46 @@ nav {
 
 .nav-spacer {
   height: 80px; /* Adjust this value based on your navbar height */
+}
+
+/* Loading Bar Styles */
+.loading-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: transparent;
+  overflow: hidden;
+  transition: background-color 0.3s ease;
+}
+
+.loading-bar.loading {
+  background-color: rgba(0, 123, 255, 0.2);
+}
+
+.loading-progress {
+  height: 100%;
+  background: linear-gradient(90deg, #007bff, #0056b3, #007bff);
+  background-size: 200% 100%;
+  width: 100%;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+
+.loading-bar.loading .loading-progress {
+  animation: loading-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 </style>
