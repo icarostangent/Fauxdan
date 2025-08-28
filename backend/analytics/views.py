@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Visitor, Session, PageView, Event
 from .serializers import EventSerializer
+from .utils import close_timed_out_sessions, get_session_stats
 import logging
 import uuid
 
@@ -47,27 +48,96 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
             
             # Debug: Log the data being sent to serializer
             logger.info(f"Data being sent to serializer: {data}")
-            logger.info(f"Session ID type: {type(data['session'])}")
-            logger.info(f"Session ID value: {data['session']}")
             
-            serializer = EventSerializer(data=data, context={'request': request})
+            # Create the event
+            serializer = self.get_serializer(data=data)
             if serializer.is_valid():
                 event = serializer.save()
-                return Response({'id': event.id}, status=status.HTTP_201_CREATED)
+                logger.info(f"Event created successfully: {event.id}")
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
                 logger.error(f"Serializer errors: {serializer.errors}")
-                logger.error(f"Serializer data: {serializer.initial_data}")
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                
+                return Response(
+                    serializer.errors, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         except Exception as e:
             logger.error(f"Error processing analytics event: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Failed to process analytics event'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=False, methods=['get'])
+    def session_stats(self, request):
+        """Get session statistics"""
+        try:
+            stats = get_session_stats()
+            return Response(stats, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error getting session stats: {str(e)}")
+            return Response(
+                {'error': 'Failed to get session statistics'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def close_sessions(self, request):
+        """Close timed-out sessions"""
+        try:
+            timeout_minutes = request.data.get('timeout_minutes', 30)
+            closed_count = close_timed_out_sessions(timeout_minutes)
+            
+            return Response({
+                'message': f'Successfully closed {closed_count} timed-out sessions',
+                'closed_count': closed_count,
+                'timeout_minutes': timeout_minutes
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error closing sessions: {str(e)}")
+            return Response(
+                {'error': 'Failed to close sessions'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def close_session(self, request):
+        """Close a specific session by ID"""
+        try:
+            session_id = request.data.get('session_id')
+            if not session_id:
+                return Response(
+                    {'error': 'session_id is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                session = Session.objects.get(id=session_id)
+            except Session.DoesNotExist:
+                return Response(
+                    {'error': 'Session not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if session.close_session():
+                return Response({
+                    'message': 'Session closed successfully',
+                    'session_id': str(session.id),
+                    'duration': str(session.duration) if session.duration else None
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'message': 'Session was already closed',
+                    'session_id': str(session.id)
+                }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Error closing session: {str(e)}")
+            return Response(
+                {'error': 'Failed to close session'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def _create_fallback_session(self, request):
         """Create a fallback session when middleware isn't available"""
         try:
@@ -118,47 +188,48 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
             
         except Exception as e:
             logger.error(f"Error creating fallback session: {str(e)}")
-            # Return None to indicate failure
             return None
     
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get'])
     def dashboard(self, request):
-        """Get analytics dashboard data - keep authenticated for admin access"""
-        # You might want to keep this endpoint authenticated
-        from rest_framework.permissions import IsAuthenticated
-        if not request.user.is_authenticated:
-            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        now = timezone.now()
-        last_30_days = now - timedelta(days=30)
-        
-        # Unique visitors
-        unique_visitors = Visitor.objects.filter(
-            first_visit__gte=last_30_days
-        ).count()
-        
-        # Total page views
-        total_page_views = PageView.objects.filter(
-            timestamp__gte=last_30_days
-        ).count()
-        
-        # Popular pages
-        popular_pages = PageView.objects.filter(
-            timestamp__gte=last_30_days
-        ).values('url').annotate(
-            count=Count('id')
-        ).order_by('-count')[:10]
-        
-        # Device breakdown
-        device_breakdown = Session.objects.filter(
-            start_time__gte=last_30_days
-        ).values('device_type').annotate(
-            count=Count('id')
-        )
-        
-        return Response({
-            'unique_visitors': unique_visitors,
-            'total_page_views': total_page_views,
-            'popular_pages': popular_pages,
-            'device_breakdown': device_breakdown,
-        })
+        """Get analytics dashboard data"""
+        try:
+            now = timezone.now()
+            last_30_days = now - timedelta(days=30)
+            
+            # Unique visitors
+            unique_visitors = Visitor.objects.filter(
+                first_visit__gte=last_30_days
+            ).count()
+            
+            # Total page views
+            total_page_views = PageView.objects.filter(
+                timestamp__gte=last_30_days
+            ).count()
+            
+            # Popular pages
+            popular_pages = PageView.objects.filter(
+                timestamp__gte=last_30_days
+            ).values('url').annotate(
+                count=Count('id')
+            ).order_by('-count')[:10]
+            
+            # Device breakdown
+            device_breakdown = Session.objects.filter(
+                start_time__gte=last_30_days
+            ).values('device_type').annotate(
+                count=Count('id')
+            )
+            
+            return Response({
+                'unique_visitors': unique_visitors,
+                'total_page_views': total_page_views,
+                'popular_pages': popular_pages,
+                'device_breakdown': device_breakdown,
+            })
+        except Exception as e:
+            logger.error(f"Error getting dashboard data: {str(e)}")
+            return Response(
+                {'error': 'Failed to get dashboard data'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -17,29 +17,22 @@ admin.site.index_title = "Welcome to Fauxdan Analytics"
 class VisitorResource(resources.ModelResource):
     class Meta:
         model = Visitor
-        fields = ('id', 'ip_address', 'user_agent', 'first_visit', 'last_visit', 'total_visits', 'is_bot', 'country', 'city', 'timezone')
+        fields = ('id', 'ip_address', 'user_agent', 'is_bot', 'total_visits', 'first_visit', 'last_visit')
         export_order = fields
 
 @admin.register(Visitor)
 class VisitorAdmin(ImportExportModelAdmin):
     resource_class = VisitorResource
-    list_display = ('ip_address', 'country', 'city', 'total_visits', 'first_visit', 'last_visit', 'is_bot', 'get_device_info')
-    list_filter = ('is_bot', 'country', 'city', 'timezone', 'first_visit')
-    search_fields = ('ip_address', 'country', 'city', 'user_agent')
-    readonly_fields = ('id', 'first_visit', 'last_visit', 'total_visits')
+    list_display = ('ip_address', 'is_bot', 'total_visits', 'first_visit', 'last_visit', 'get_sessions_count')
+    list_filter = ('is_bot', 'first_visit', 'last_visit')
+    search_fields = ('ip_address', 'user_agent')
+    readonly_fields = ('id', 'first_visit')
     list_per_page = 50
     
-    def get_device_info(self, obj):
-        # Get device info from related sessions
-        sessions = obj.sessions.all()
-        if sessions.exists():
-            device_types = set(s.device_type for s in sessions)
-            browsers = set(s.browser for s in sessions)
-            # Convert set to list before slicing
-            browser_list = list(browsers)
-            return f"{', '.join(device_types)} | {', '.join(browser_list[:2])}"
-        return "No sessions"
-    get_device_info.short_description = "Device Info"
+    def get_sessions_count(self, obj):
+        count = obj.sessions.count()
+        return format_html('<span style="color: #007cba;">{}</span>', count)
+    get_sessions_count.short_description = "Sessions"
     
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related('sessions')
@@ -53,16 +46,62 @@ class SessionResource(resources.ModelResource):
 @admin.register(Session)
 class SessionAdmin(ImportExportModelAdmin):
     resource_class = SessionResource
-    list_display = ('session_id', 'visitor', 'user', 'device_type', 'browser', 'os', 'start_time', 'duration', 'get_page_views_count')
-    list_filter = ('device_type', 'browser', 'os', 'start_time')
+    list_display = ('session_id', 'visitor', 'user', 'device_type', 'browser', 'os', 'start_time', 'get_duration_display', 'get_status', 'get_page_views_count')
+    list_filter = ('device_type', 'browser', 'os', 'start_time', 'end_time')
     search_fields = ('session_id', 'visitor__ip_address', 'user__username')
-    readonly_fields = ('id', 'start_time')
+    readonly_fields = ('id', 'start_time', 'get_duration_display', 'get_status')
     list_per_page = 50
+    actions = ['close_selected_sessions', 'calculate_durations']
+    
+    def get_duration_display(self, obj):
+        return obj.get_duration_display()
+    get_duration_display.short_description = "Duration"
+    
+    def get_status(self, obj):
+        if obj.is_active():
+            return format_html('<span style="color: #28a745;">Active</span>')
+        else:
+            return format_html('<span style="color: #6c757d;">Closed</span>')
+    get_status.short_description = "Status"
     
     def get_page_views_count(self, obj):
         count = obj.page_views.count()
         return format_html('<span style="color: #007cba;">{}</span>', count)
     get_page_views_count.short_description = "Page Views"
+    
+    def close_selected_sessions(self, request, queryset):
+        """Admin action to close selected sessions"""
+        active_sessions = queryset.filter(end_time__isnull=True)
+        closed_count = 0
+        
+        for session in active_sessions:
+            if session.close_session():
+                closed_count += 1
+        
+        self.message_user(
+            request,
+            f'Successfully closed {closed_count} out of {queryset.count()} selected sessions.'
+        )
+    close_selected_sessions.short_description = "Close selected sessions"
+    
+    def calculate_durations(self, request, queryset):
+        """Admin action to calculate durations for closed sessions"""
+        sessions_without_duration = queryset.filter(
+            end_time__isnot=None,
+            duration__isnull=True
+        )
+        calculated_count = 0
+        
+        for session in sessions_without_duration:
+            session.duration = session.end_time - session.start_time
+            session.save()
+            calculated_count += 1
+        
+        self.message_user(
+            request,
+            f'Successfully calculated durations for {calculated_count} out of {queryset.count()} selected sessions.'
+        )
+    calculate_durations.short_description = "Calculate durations for closed sessions"
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('visitor', 'user').prefetch_related('page_views')
@@ -138,10 +177,7 @@ class AnalyticsDashboardAdmin(admin.ModelAdmin):
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # Geographic statistics
-        country_stats = Visitor.objects.values('country').annotate(
-            count=Count('id')
-        ).order_by('-count')[:10]
+        # Geographic statistics (removed country stats as field doesn't exist)
         
         extra_context = extra_context or {}
         extra_context.update({
@@ -155,7 +191,6 @@ class AnalyticsDashboardAdmin(admin.ModelAdmin):
             'popular_pages': popular_pages,
             'device_stats': device_stats,
             'browser_stats': browser_stats,
-            'country_stats': country_stats,
             'start_date': start_date,
             'end_date': end_date,
         })

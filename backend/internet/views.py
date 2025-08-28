@@ -11,6 +11,7 @@ from django.core.management import call_command
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from backend.pagination import PathOnlyPagination
+from django.utils import timezone
 
 
 class ScanViewSet(viewsets.ReadOnlyModelViewSet):
@@ -132,6 +133,21 @@ class CreateScanView(APIView):
             'host_ip': host.ip,
             'status': scan.status
         }, status=status.HTTP_201_CREATED)
+
+
+class HealthCheckView(APIView):
+    """
+    Simple health check endpoint for Docker healthchecks
+    """
+    def get(self, request):
+        return Response(
+            {
+                'status': 'healthy',
+                'timestamp': timezone.now().isoformat(),
+                'service': 'fauxdan-backend'
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 class UniversalSearchView(ListAPIView):

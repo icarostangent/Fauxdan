@@ -63,6 +63,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'analytics.middleware.AnalyticsMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -98,6 +99,23 @@ DATABASES = {
         'HOST': os.getenv('DJANGO_DB_HOST'),
         'PORT': os.getenv('DJANGO_DB_PORT'),
     }
+}
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'analytics': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
 }
 
 

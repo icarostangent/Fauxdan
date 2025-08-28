@@ -2,25 +2,20 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 import uuid
+from datetime import timedelta
 
 class Visitor(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
-    user_agent = models.TextField()
-    first_visit = models.DateTimeField(default=timezone.now)
-    last_visit = models.DateTimeField(auto_now=True)
-    total_visits = models.IntegerField(default=1)
+    ip_address = models.GenericIPAddressField(unique=True)
+    user_agent = models.TextField(blank=True)
     is_bot = models.BooleanField(default=False)
-    
-    # Geolocation data
-    country = models.CharField(max_length=100, null=True, blank=True)
-    city = models.CharField(max_length=100, null=True, blank=True)
-    timezone = models.CharField(max_length=50, null=True, blank=True)
+    total_visits = models.IntegerField(default=1)
+    first_visit = models.DateTimeField(default=timezone.now)
+    last_visit = models.DateTimeField(default=timezone.now)
     
     class Meta:
         indexes = [
             models.Index(fields=['ip_address']),
-            models.Index(fields=['first_visit']),
             models.Index(fields=['is_bot']),
         ]
 
@@ -48,6 +43,41 @@ class Session(models.Model):
             models.Index(fields=['start_time']),
             models.Index(fields=['user']),
         ]
+    
+    def close_session(self):
+        """Close the session and calculate duration"""
+        if self.end_time is None:
+            self.end_time = timezone.now()
+            self.duration = self.end_time - self.start_time
+            self.save()
+            return True
+        return False
+    
+    def is_active(self):
+        """Check if session is currently active"""
+        return self.end_time is None
+    
+    def is_timed_out(self, timeout_minutes=30):
+        """Check if session has timed out based on inactivity"""
+        if self.is_active():
+            return timezone.now() - self.start_time > timedelta(minutes=timeout_minutes)
+        return False
+    
+    def get_duration_display(self):
+        """Get human-readable duration string"""
+        if self.duration:
+            total_seconds = int(self.duration.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            
+            if hours > 0:
+                return f"{hours}h {minutes}m {seconds}s"
+            elif minutes > 0:
+                return f"{minutes}m {seconds}s"
+            else:
+                return f"{seconds}s"
+        return "Active" if self.is_active() else "Unknown"
 
 class PageView(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -81,6 +111,3 @@ class Event(models.Model):
             models.Index(fields=['category']),
             models.Index(fields=['timestamp']),
         ]
-
-
-# Create your models here.

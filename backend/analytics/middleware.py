@@ -2,18 +2,28 @@ from django.utils.deprecation import MiddlewareMixin
 from django.http import JsonResponse
 from .models import Visitor, Session, PageView
 from .utils import get_client_ip, detect_device, is_bot
+from django.utils import timezone
+from datetime import timedelta
 import json
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AnalyticsMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # Skip analytics for certain paths
         if request.path.startswith('/api/analytics/') or request.path.startswith('/admin/'):
+            logger.debug(f"Skipping analytics for path: {request.path}")
             return None
+            
+        logger.debug(f"Analytics middleware processing: {request.path}")
             
         # Get or create visitor
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        logger.debug(f"Processing visitor with IP: {ip_address}")
         
         visitor, created = Visitor.objects.get_or_create(
             ip_address=ip_address,
@@ -23,25 +33,52 @@ class AnalyticsMiddleware(MiddlewareMixin):
             }
         )
         
-        if not created:
+        if created:
+            logger.debug(f"Created new visitor: {visitor.id}")
+        else:
+            logger.debug(f"Updated existing visitor: {visitor.id}, total visits: {visitor.total_visits + 1}")
             visitor.total_visits += 1
             visitor.save()
         
-        # Create or get session
+        # Check for existing active session and handle timeout
         session_id = request.COOKIES.get('session_id')
-        if not session_id:
-            session_id = f"session_{visitor.id}_{int(time.time())}"
+        existing_session = None
         
-        session, _ = Session.objects.get_or_create(
-            session_id=session_id,
-            defaults={
-                'visitor': visitor,
-                'user': request.user if request.user.is_authenticated else None,
-                'device_type': detect_device(user_agent)['device_type'],
-                'browser': detect_device(user_agent)['browser'],
-                'os': detect_device(user_agent)['os'],
-            }
-        )
+        if session_id:
+            try:
+                existing_session = Session.objects.get(session_id=session_id, end_time__isnull=True)
+                # Check if session has timed out (30 minutes of inactivity)
+                if timezone.now() - existing_session.start_time > timedelta(minutes=30):
+                    logger.debug(f"Session {existing_session.id} timed out, closing it")
+                    existing_session.end_time = timezone.now()
+                    existing_session.duration = existing_session.end_time - existing_session.start_time
+                    existing_session.save()
+                    existing_session = None
+                    session_id = None  # Force new session creation
+                else:
+                    logger.debug(f"Using existing active session: {existing_session.id}")
+            except Session.DoesNotExist:
+                logger.debug(f"Session {session_id} not found, will create new one")
+                session_id = None
+        
+        # Create new session if needed
+        if not existing_session:
+            if not session_id:
+                session_id = f"session_{visitor.id}_{int(time.time())}"
+            
+            logger.debug(f"Creating new session: {session_id}")
+            
+            session = Session.objects.create(
+                session_id=session_id,
+                visitor=visitor,
+                user=request.user if request.user.is_authenticated else None,
+                device_type=detect_device(user_agent)['device_type'],
+                browser=detect_device(user_agent)['browser'],
+                os=detect_device(user_agent)['os'],
+            )
+            logger.debug(f"Created new session: {session.id}")
+        else:
+            session = existing_session
         
         # Store in request for later use
         request.analytics_visitor = visitor

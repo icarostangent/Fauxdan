@@ -21,4 +21,4 @@ RUN pip3 install -r requirements.txt
 
 COPY . .
 
-ENV LOL=LMAO
+# Environment variables for production scanner
