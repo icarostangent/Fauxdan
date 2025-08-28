@@ -52,7 +52,7 @@
         <!-- First Page -->
         <button 
           class="pagination-btn"
-          :disabled="!hosts?.previous || hosts?.page === 1" 
+          :disabled="totalPages <= 1 || hosts?.page === 1" 
           @click="handleFirstPage"
           title="Go to first page"
         >
@@ -62,7 +62,7 @@
         <!-- Previous Page -->
         <button 
           class="pagination-btn"
-          :disabled="!hosts?.previous" 
+          :disabled="totalPages <= 1 || !hosts?.previous" 
           @click="handlePreviousPage"
           title="Go to previous page"
         >
@@ -89,7 +89,7 @@
         <!-- Next Page -->
         <button 
           class="pagination-btn"
-          :disabled="!hosts?.next" 
+          :disabled="totalPages <= 1 || !hosts?.next" 
           @click="handleNextPage"
           title="Go to next page"
         >
@@ -99,7 +99,7 @@
         <!-- Last Page -->
         <button 
           class="pagination-btn"
-          :disabled="!hosts?.next || hosts?.page === totalPages" 
+          :disabled="totalPages <= 1 || hosts?.page === totalPages" 
           @click="handleLastPage"
           title="Go to last page"
         >
@@ -213,7 +213,7 @@ export default defineComponent({
     const totalPages = computed(() => props.hosts?.total_pages || 1)
     const startResult = computed(() => {
       if (!props.hosts?.results?.length) return 0
-      return ((props.hosts.page || 1) - 1) * (props.hosts.page_size || 10) + 1
+      return ((props.hosts.page || 1) - 1) * (props.hosts.page_size || 50) + 1
     })
     const endResult = computed(() => {
       if (!props.hosts?.results?.length) return 0
@@ -225,6 +225,11 @@ export default defineComponent({
       const currentPage = props.hosts?.page || 1
       const total = totalPages.value
       const delta = 2
+      
+      // If there's only 1 page, just return [1]
+      if (total === 1) {
+        return [1]
+      }
       
       const range = []
       const rangeWithDots = []
@@ -243,22 +248,23 @@ export default defineComponent({
       
       if (currentPage + delta < total - 1) {
         rangeWithDots.push('...', total)
-      } else {
+      } else if (total > 1) {
         rangeWithDots.push(total)
       }
       
-      return rangeWithDots.filter(item => item !== 1 || total === 1)
+      return rangeWithDots
     })
 
     const showLeftEllipsis = computed(() => {
       const currentPage = props.hosts?.page || 1
-      return currentPage - 2 > 1
+      const total = totalPages.value
+      return total > 1 && currentPage - 2 > 1
     })
 
     const showRightEllipsis = computed(() => {
       const currentPage = props.hosts?.page || 1
       const total = totalPages.value
-      return currentPage + 2 < total
+      return total > 1 && currentPage + 2 < total
     })
 
     return {

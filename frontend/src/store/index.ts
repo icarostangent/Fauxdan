@@ -9,6 +9,7 @@ interface PaginatedHosts {
   page_size: number
   next: string | null
   previous: string | null
+  total_pages?: number
 }
 
 interface RootState {
@@ -23,7 +24,8 @@ export default createStore<RootState>({
       page: 1,
       page_size: 50,
       next: null,
-      previous: null
+      previous: null,
+      total_pages: 1
     }
   },
 
@@ -33,12 +35,18 @@ export default createStore<RootState>({
     getCurrentPage: (state: RootState): number => state.hosts.page,
     getPageSize: (state: RootState): number => state.hosts.page_size,
     getNextPage: (state: RootState): string | null => state.hosts.next,
-    getPreviousPage: (state: RootState): string | null => state.hosts.previous
+    getPreviousPage: (state: RootState): string | null => state.hosts.previous,
+    getTotalPages: (state: RootState): number => state.hosts.total_pages || 1
   },
 
   mutations: {
     setHosts(state: RootState, payload: PaginatedHosts) {
-      state.hosts = payload
+      // Compute total_pages from count and page_size
+      const total_pages = Math.ceil(payload.count / payload.page_size)
+      state.hosts = {
+        ...payload,
+        total_pages
+      }
     }
   },
 

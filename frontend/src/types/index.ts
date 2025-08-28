@@ -49,6 +49,7 @@ export interface PaginatedResponse<T> {
   page: number
   page_size: number
   results: T[]
+  total_pages?: number // Add computed field for total pages
 }
 
 export type PaginatedHosts = PaginatedResponse<Host> 
