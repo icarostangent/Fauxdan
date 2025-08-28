@@ -22,16 +22,51 @@
 </template>
 
 <script>
-import { ref, provide, onMounted } from 'vue'
+import { ref, provide, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { analytics } from '@/services/analytics'
 
 export default {
   name: 'App',
   setup() {
     const isLoading = ref(false)
+    const router = useRouter()
     
     // Provide loading state to child components
     provide('setGlobalLoading', (loading) => {
+      // Track loading state changes
+      if (loading !== isLoading.value) {
+        analytics.trackEvent({
+          event: 'loading_state',
+          category: 'system',
+          action: loading ? 'start_loading' : 'stop_loading',
+          label: router.currentRoute.value.path
+        })
+      }
+      
       isLoading.value = loading
+    })
+    
+    // Track route changes for navigation analytics
+    watch(() => router.currentRoute.value, (newRoute, oldRoute) => {
+      if (oldRoute && newRoute.path !== oldRoute.path) {
+        analytics.trackEvent({
+          event: 'navigation',
+          category: 'user_interaction',
+          action: 'route_change',
+          label: `${oldRoute.path} -> ${newRoute.path}`
+        })
+      }
+    })
+    
+    onMounted(() => {
+      // Track initial app load
+      analytics.trackEvent({
+        event: 'app_initialization',
+        category: 'system',
+        action: 'app_mounted',
+        label: 'initial_load'
+      })
     })
     
     return {

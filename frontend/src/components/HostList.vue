@@ -53,7 +53,7 @@
         <button 
           class="pagination-btn"
           :disabled="!hosts?.previous || hosts?.page === 1" 
-          @click="$emit('page-change', 1)"
+          @click="handleFirstPage"
           title="Go to first page"
         >
           ««
@@ -63,7 +63,7 @@
         <button 
           class="pagination-btn"
           :disabled="!hosts?.previous" 
-          @click="$emit('page-change', (hosts?.page || 1) - 1)"
+          @click="handlePreviousPage"
           title="Go to previous page"
         >
           «
@@ -76,7 +76,7 @@
             :key="pageNum"
             class="pagination-btn page-number"
             :class="{ active: pageNum === (hosts?.page || 1) }"
-            @click="$emit('page-change', pageNum)"
+            @click="handlePageChange(pageNum)"
           >
             {{ pageNum }}
           </button>
@@ -90,7 +90,7 @@
         <button 
           class="pagination-btn"
           :disabled="!hosts?.next" 
-          @click="$emit('page-change', (hosts?.page || 1) + 1)"
+          @click="handleNextPage"
           title="Go to next page"
         >
           »
@@ -100,7 +100,7 @@
         <button 
           class="pagination-btn"
           :disabled="!hosts?.next || hosts?.page === totalPages" 
-          @click="$emit('page-change', totalPages)"
+          @click="handleLastPage"
           title="Go to last page"
         >
           »»
@@ -111,9 +111,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, computed } from 'vue'
-import HostElement from '@/components/HostElement.vue'
-import { PaginatedHosts } from '@/types'
+import { defineComponent, computed } from 'vue'
+import HostElement from './HostElement.vue'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'HostList',
@@ -124,16 +124,8 @@ export default defineComponent({
 
   props: {
     hosts: {
-      type: Object as PropType<PaginatedHosts>,
-      required: true,
-      default: () => ({
-        count: 0,
-        next: null,
-        previous: null,
-        page: 1,
-        page_size: 50,
-        results: []
-      })
+      type: Object,
+      required: true
     },
     loading: {
       type: Boolean,
@@ -147,47 +139,126 @@ export default defineComponent({
 
   emits: ['page-change'],
 
-  setup(props) {
+  setup(props, { emit }) {
+    // Track pagination clicks
+    const handlePageChange = (page: number) => {
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'change_page',
+        label: `hosts_page_${page}`,
+        value: page
+      })
+      
+      emit('page-change', page)
+    }
+
+    // Track first page navigation
+    const handleFirstPage = () => {
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'go_to_first_page',
+        label: 'hosts_list'
+      })
+      
+      emit('page-change', 1)
+    }
+
+    // Track last page navigation
+    const handleLastPage = () => {
+      const lastPage = props.hosts?.total_pages || 1
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'go_to_last_page',
+        label: `hosts_page_${lastPage}`,
+        value: lastPage
+      })
+      
+      emit('page-change', lastPage)
+    }
+
+    // Track previous page navigation
+    const handlePreviousPage = () => {
+      const currentPage = props.hosts?.page || 1
+      const prevPage = currentPage - 1
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'go_to_previous_page',
+        label: `hosts_page_${prevPage}`,
+        value: prevPage
+      })
+      
+      emit('page-change', prevPage)
+    }
+
+    // Track next page navigation
+    const handleNextPage = () => {
+      const currentPage = props.hosts?.page || 1
+      const nextPage = currentPage + 1
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'go_to_next_page',
+        label: `hosts_page_${nextPage}`,
+        value: nextPage
+      })
+      
+      emit('page-change', nextPage)
+    }
+
     // Computed properties for pagination
-    const totalPages = computed(() => Math.ceil((props.hosts?.count || 0) / (props.hosts?.page_size || 50)))
+    const totalPages = computed(() => props.hosts?.total_pages || 1)
     const startResult = computed(() => {
       if (!props.hosts?.results?.length) return 0
-      return ((props.hosts.page || 1) - 1) * (props.hosts.page_size || 50) + 1
+      return ((props.hosts.page || 1) - 1) * (props.hosts.page_size || 10) + 1
     })
     const endResult = computed(() => {
       if (!props.hosts?.results?.length) return 0
-      return Math.min((props.hosts.page || 1) * (props.hosts.page_size || 50), props.hosts.count || 0)
+      return startResult.value + props.hosts.results.length - 1
     })
 
-    // Smart page number display (show current page ± 2, with ellipsis)
+    // Pagination display logic
     const visiblePageNumbers = computed(() => {
       const currentPage = props.hosts?.page || 1
       const total = totalPages.value
+      const delta = 2
       
-      if (total <= 7) {
-        return Array.from({ length: total }, (_, i) => i + 1)
+      const range = []
+      const rangeWithDots = []
+      
+      for (let i = Math.max(2, currentPage - delta); i <= Math.min(total - 1, currentPage + delta); i++) {
+        range.push(i)
       }
       
-      if (currentPage <= 4) {
-        return [1, 2, 3, 4, 5, '...', total]
+      if (currentPage - delta > 2) {
+        rangeWithDots.push(1, '...')
+      } else {
+        rangeWithDots.push(1)
       }
       
-      if (currentPage >= total - 3) {
-        return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+      rangeWithDots.push(...range)
+      
+      if (currentPage + delta < total - 1) {
+        rangeWithDots.push('...', total)
+      } else {
+        rangeWithDots.push(total)
       }
       
-      return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', total]
+      return rangeWithDots.filter(item => item !== 1 || total === 1)
     })
 
     const showLeftEllipsis = computed(() => {
       const currentPage = props.hosts?.page || 1
-      return currentPage > 4
+      return currentPage - 2 > 1
     })
 
     const showRightEllipsis = computed(() => {
       const currentPage = props.hosts?.page || 1
       const total = totalPages.value
-      return currentPage < total - 3
+      return currentPage + 2 < total
     })
 
     return {
@@ -196,7 +267,12 @@ export default defineComponent({
       endResult,
       visiblePageNumbers,
       showLeftEllipsis,
-      showRightEllipsis
+      showRightEllipsis,
+      handlePageChange,
+      handleFirstPage,
+      handleLastPage,
+      handlePreviousPage,
+      handleNextPage
     }
   }
 })

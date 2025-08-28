@@ -97,18 +97,42 @@ export default defineComponent({
     }
     
     const shareOnTwitter = () => {
+      // Track social sharing event
+      analytics.trackEvent({
+        event: 'social_share',
+        category: 'content',
+        action: 'share_twitter',
+        label: post.value?.title || 'unknown'
+      })
+      
       const url = encodeURIComponent(window.location.href)
       const text = encodeURIComponent(post.value?.title || '')
       window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
     }
     
     const shareOnLinkedIn = () => {
+      // Track social sharing event
+      analytics.trackEvent({
+        event: 'social_share',
+        category: 'content',
+        action: 'share_linkedin',
+        label: post.value?.title || 'unknown'
+      })
+      
       const url = encodeURIComponent(window.location.href)
       const title = encodeURIComponent(post.value?.title || '')
       window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank')
     }
     
     const copyLink = async () => {
+      // Track copy link event
+      analytics.trackEvent({
+        event: 'content_interaction',
+        category: 'content',
+        action: 'copy_link',
+        label: post.value?.title || 'unknown'
+      })
+      
       try {
         await navigator.clipboard.writeText(window.location.href)
         alert('Link copied to clipboard!')
@@ -139,6 +163,8 @@ export default defineComponent({
     }
     
     onMounted(() => {
+      // Track page view when component mounts
+      analytics.trackPageView(`/blog/${route.params.id}`)
       loadPost()
     })
     

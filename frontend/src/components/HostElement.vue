@@ -47,6 +47,7 @@ import { defineComponent, PropType, ref } from 'vue'
 import { Host } from '@/types'
 import { formatLastSeen, formatDate, formatPortDate } from '@/utils/date'
 import { useRouter } from 'vue-router'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'HostElement',
@@ -64,6 +65,15 @@ export default defineComponent({
 
     const navigateToHost = () => {
       if (props.host.id) {
+        // Track host card click
+        analytics.trackEvent({
+          event: 'host_interaction',
+          category: 'content',
+          action: 'click_host_card',
+          label: props.host.ip,
+          value: props.host.ports?.length || 0
+        })
+        
         router.push(`/hosts/${props.host.id}`)
       }
     }

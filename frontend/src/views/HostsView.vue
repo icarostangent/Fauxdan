@@ -72,6 +72,14 @@ export default defineComponent({
       }
 
       searchTimeout = setTimeout(() => {
+        // Track search event
+        analytics.trackEvent({
+          event: 'search',
+          category: 'user_interaction',
+          action: 'search_hosts',
+          label: query || 'empty_search'
+        })
+
         // Update URL with search query
         router.push({
           query: {
@@ -84,6 +92,15 @@ export default defineComponent({
     }
 
     const handlePageChange = (page: number) => {
+      // Track pagination event
+      analytics.trackEvent({
+        event: 'pagination',
+        category: 'user_interaction',
+        action: 'change_page',
+        label: `page_${page}`,
+        value: page
+      })
+
       router.push({
         query: {
           ...route.query,
@@ -118,6 +135,11 @@ export default defineComponent({
       },
       { immediate: true }
     )
+
+    // Track page view when component mounts
+    onMounted(() => {
+      analytics.trackPageView('/hosts')
+    })
 
     // Cleanup: Reset global loading when component unmounts
     onUnmounted(() => {

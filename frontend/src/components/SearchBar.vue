@@ -83,6 +83,7 @@
 
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue'
+import { analytics } from '@/services/analytics'
 
 export default defineComponent({
   name: 'SearchBar',
@@ -99,19 +100,43 @@ export default defineComponent({
     const showExamples = ref(false)
 
     const onSearch = () => {
+      // Track search event
+      analytics.trackEvent({
+        event: 'search',
+        category: 'user_interaction',
+        action: 'search_input',
+        label: searchQuery.value || 'empty_search'
+      })
+      
       emit('search', searchQuery.value)
     }
 
-    const toggleExamples = () => {
-      showExamples.value = !showExamples.value
-    }
-
     const setSearchQuery = (query: string) => {
+      // Track example tag click
+      analytics.trackEvent({
+        event: 'search_example',
+        category: 'user_interaction',
+        action: 'click_example_tag',
+        label: query
+      })
+      
       searchQuery.value = query
       emit('search', query)
     }
 
-    // Update searchQuery when initialValue changes
+    const toggleExamples = () => {
+      // Track examples toggle
+      analytics.trackEvent({
+        event: 'ui_interaction',
+        category: 'user_interaction',
+        action: 'toggle_search_examples',
+        label: showExamples.value ? 'hide' : 'show'
+      })
+      
+      showExamples.value = !showExamples.value
+    }
+
+    // Watch for initial value changes
     watch(() => props.initialValue, (newValue) => {
       searchQuery.value = newValue
     })
@@ -120,8 +145,8 @@ export default defineComponent({
       searchQuery,
       showExamples,
       onSearch,
-      toggleExamples,
-      setSearchQuery
+      setSearchQuery,
+      toggleExamples
     }
   }
 })

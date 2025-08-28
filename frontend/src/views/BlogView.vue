@@ -136,6 +136,14 @@ export default defineComponent({
     })
     
     const viewPost = (postId: string) => {
+      // Track article view event
+      analytics.trackEvent({
+        event: 'article_view',
+        category: 'content',
+        action: 'view_article',
+        label: postId
+      })
+      
       console.log('Navigating to post:', postId) // Debug log
       router.push(`/blog/${postId}`)
     }
@@ -163,6 +171,8 @@ export default defineComponent({
     }
     
     onMounted(() => {
+      // Track page view when component mounts
+      analytics.trackPageView('/blog')
       loadPosts()
     })
     

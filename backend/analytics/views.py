@@ -25,46 +25,59 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
             # Debug: Log the incoming data
             logger.info(f"Received analytics data: {request.data}")
             
-            # Check if analytics session exists from middleware
-            if hasattr(request, 'analytics_session') and request.analytics_session:
-                session = request.analytics_session
-                logger.info(f"Using middleware session: {session.id} (type: {type(session.id)})")
-            else:
-                # Create a session if middleware didn't run
-                logger.warning("Analytics middleware session not found, creating fallback session")
-                session = self._create_fallback_session(request)
-                logger.info(f"Created fallback session: {session.id} (type: {type(session.id)})")
+            # Extract data from request
+            event_data = request.data
             
-            if not session:
-                logger.error("Failed to create analytics session")
-                return Response(
-                    {'error': 'Failed to create analytics session'}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            # Handle page views specifically
+            if event_data.get('event_type') == 'page_view':
+                # Create PageView object for page views
+                page_view = PageView.objects.create(
+                    session=request.analytics_session,
+                    url=event_data.get('page_url', ''),
+                    title=event_data.get('page_url', 'Unknown'),  # Use URL as title for now
+                    referrer=event_data.get('referrer'),
+                    timestamp=timezone.now()
                 )
-            
-            # Add session to request data - send the UUID string, not the object
-            data = request.data.copy()
-            data['session'] = str(session.id)  # Convert UUID to string
-            
-            # Debug: Log the data being sent to serializer
-            logger.info(f"Data being sent to serializer: {data}")
-            
-            # Create the event
-            serializer = self.get_serializer(data=data)
-            if serializer.is_valid():
-                event = serializer.save()
-                logger.info(f"Event created successfully: {event.id}")
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                logger.error(f"Serializer errors: {serializer.errors}")
-                return Response(
-                    serializer.errors, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                
+                logger.info(f"Created page view: {page_view.id} for {event_data.get('page_url')}")
+                
+                # Also create an Event record for tracking
+                event = Event.objects.create(
+                    session=request.analytics_session,
+                    event_type=event_data.get('event_type', 'page_view'),
+                    category=event_data.get('category', 'engagement'),
+                    action=event_data.get('action', 'page_view'),
+                    label=event_data.get('label'),
+                    value=event_data.get('value'),
+                    timestamp=timezone.now()
                 )
+                
+                return Response({
+                    'status': 'success', 
+                    'page_view_id': page_view.id,
+                    'event_id': event.id
+                }, status=status.HTTP_201_CREATED)
+            
+            else:
+                # Handle other event types
+                event = Event.objects.create(
+                    session=request.analytics_session,
+                    event_type=event_data.get('event_type', 'unknown'),
+                    category=event_data.get('category', 'general'),
+                    action=event_data.get('action', 'unknown'),
+                    label=event_data.get('label'),
+                    value=event_data.get('value'),
+                    timestamp=timezone.now()
+                )
+                
+                logger.info(f"Created event: {event.id} of type {event.event_type}")
+                
+                return Response({'status': 'success', 'event_id': event.id}, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
             logger.error(f"Error processing analytics event: {str(e)}")
             return Response(
-                {'error': 'Failed to process analytics event'}, 
+                {'error': 'Failed to process event'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
