@@ -16,7 +16,7 @@
 <script lang="ts">
 import { defineComponent, inject } from 'vue'
 import { useStore } from 'vuex'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HostList from '@/components/HostList.vue'
 import SearchBar from '@/components/SearchBar.vue'
@@ -108,6 +108,11 @@ export default defineComponent({
       },
       { immediate: true }
     )
+
+    // Cleanup: Reset global loading when component unmounts
+    onUnmounted(() => {
+      setGlobalLoading?.(false)
+    })
 
     return {
       hosts,
