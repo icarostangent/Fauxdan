@@ -4,6 +4,13 @@
       :initial-value="route.query.q?.toString() || ''"
       @search="handleSearch" 
     />
+    
+    <!-- Port-Specific Metrics Dashboard -->
+    <PortMetrics 
+      :hosts="hosts.results"
+      :search-query="route.query.q?.toString() || ''"
+    />
+    
     <HostList 
       :hosts="hosts"
       :loading="loading"
@@ -20,13 +27,15 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HostList from '@/components/HostList.vue'
 import SearchBar from '@/components/SearchBar.vue'
+import PortMetrics from '@/components/PortMetrics.vue'
 
 export default defineComponent({
   name: 'AboutView',
   
   components: {
     HostList,
-    SearchBar
+    SearchBar,
+    PortMetrics
   },
 
   setup() {
