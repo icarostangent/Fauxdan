@@ -98,50 +98,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Security Overview -->
-      <div class="metric-card security">
-        <div class="metric-header">
-          <h4>🛡️ Security Overview</h4>
-        </div>
-        <div class="metric-content">
-          <div class="metric-item">
-            <span class="metric-label">Risk Score:</span>
-            <span class="metric-value risk-score" :class="getRiskClass(securityMetrics.riskScore)">
-              {{ securityMetrics.riskScore }}/10
-            </span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">Vulnerable Hosts:</span>
-            <span class="metric-value">{{ securityMetrics.vulnerableHosts }}</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">Exposed Services:</span>
-            <span class="metric-value">{{ securityMetrics.exposedServices }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Geographic Distribution -->
-      <div class="metric-card geographic">
-        <div class="metric-header">
-          <h4>🌍 Geographic Distribution</h4>
-        </div>
-        <div class="metric-content">
-          <div class="metric-item">
-            <span class="metric-label">Countries:</span>
-            <span class="metric-value">{{ geographicMetrics.countries.length }}</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">Top Region:</span>
-            <span class="metric-value">{{ geographicMetrics.topRegion }}</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label">Cloud Providers:</span>
-            <span class="metric-value">{{ geographicMetrics.cloudProviders.join(', ') }}</span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -149,6 +105,16 @@
 <script lang="ts">
 import { defineComponent, computed, onMounted } from 'vue'
 import { analytics } from '@/services/analytics'
+
+interface Port {
+  port_number: number
+  // add other port properties as needed
+}
+
+interface Host {
+  ports?: Port[]
+  // add other host properties as needed
+}
 
 export default defineComponent({
   name: 'PortMetrics',
@@ -226,7 +192,7 @@ export default defineComponent({
     }
 
     const getCategoryLabel = (category: string) => {
-      const labels = {
+      const labels: { [key: string]: string } = {
         web: 'Web',
         database: 'Database',
         proxy: 'Proxy',
@@ -237,12 +203,12 @@ export default defineComponent({
 
     // Web metrics
     const webMetrics = computed(() => {
-      const webHosts = props.hosts?.filter(host => 
-        host.ports?.some(port => [80, 443, 8080, 8443].includes(port.port_number))
+      const webHosts = (props.hosts as Host[])?.filter((host: Host) => 
+        host.ports?.some((port: Port) => [80, 443, 8080, 8443].includes(port.port_number))
       ) || []
       
-      const sslEnabled = webHosts.filter(host => 
-        host.ports?.some(port => [443, 8443].includes(port.port_number))
+      const sslEnabled = webHosts.filter((host: Host) => 
+        host.ports?.some((port: Port) => [443, 8443].includes(port.port_number))
       ).length
       
       return {
@@ -255,8 +221,8 @@ export default defineComponent({
 
     // Database metrics
     const databaseMetrics = computed(() => {
-      const dbHosts = props.hosts?.filter(host => 
-        host.ports?.some(port => [3306, 5432, 27017, 6379].includes(port.port_number))
+      const dbHosts = (props.hosts as Host[])?.filter((host: Host) => 
+        host.ports?.some((port: Port) => [3306, 5432, 27017, 6379].includes(port.port_number))
       ) || []
       
       return {
@@ -268,8 +234,8 @@ export default defineComponent({
 
     // Proxy metrics
     const proxyMetrics = computed(() => {
-      const proxyHosts = props.hosts?.filter(host => 
-        host.ports?.some(port => [3128, 8080, 1080].includes(port.port_number))
+      const proxyHosts = (props.hosts as Host[])?.filter((host: Host) => 
+        host.ports?.some((port: Port) => [3128, 8080, 1080].includes(port.port_number))
       ) || []
       
       return {
@@ -281,8 +247,8 @@ export default defineComponent({
 
     // DNS metrics
     const dnsMetrics = computed(() => {
-      const dnsHosts = props.hosts?.filter(host => 
-        host.ports?.some(port => port.port_number === 53)
+      const dnsHosts = (props.hosts as Host[])?.filter((host: Host) => 
+        host.ports?.some((port: Port) => port.port_number === 53)
       ) || []
       
       return {
@@ -296,6 +262,7 @@ export default defineComponent({
       hasMetrics,
       portContextTitle,
       detectedCategories,
+      getCategoryCount,
       getCategoryLabel,
       webMetrics,
       databaseMetrics,
