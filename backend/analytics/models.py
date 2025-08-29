@@ -111,3 +111,87 @@ class Event(models.Model):
             models.Index(fields=['category']),
             models.Index(fields=['timestamp']),
         ]
+
+class UserStory(Session):
+    """Proxy model for displaying user stories in admin"""
+    
+    class Meta:
+        verbose_name = "User Story"
+        verbose_name_plural = "User Stories"
+        proxy = True
+    
+    def get_visitor_info(self):
+        """Get visitor information for display"""
+        return {
+            'ip_address': self.visitor.ip_address,
+            'user_agent': self.visitor.user_agent,
+            'is_bot': self.visitor.is_bot,
+            'total_visits': self.visitor.total_visits,
+        }
+    
+    def get_session_info(self):
+        """Get session information for display"""
+        return {
+            'session_id': self.session_id,
+            'start_time': self.start_time,
+            'end_time': self.end_time,
+            'duration': self.get_duration_display(),
+            'device_type': self.device_type,
+            'browser': self.browser,
+            'os': self.os,
+            'status': 'Active' if self.is_active() else 'Closed',
+        }
+    
+    def get_page_views(self):
+        """Get all page views for this session"""
+        return self.page_views.all().order_by('timestamp')
+    
+    def get_events(self):
+        """Get all events for this session"""
+        return self.events.all().order_by('timestamp')
+    
+    def get_user_journey(self):
+        """Get the complete user journey as a timeline"""
+        journey = []
+        
+        # Add session start
+        journey.append({
+            'type': 'session_start',
+            'timestamp': self.start_time,
+            'description': f'Session started on {self.device_type} using {self.browser}',
+            'icon': '🚀'
+        })
+        
+        # Add page views
+        for page_view in self.get_page_views():
+            journey.append({
+                'type': 'page_view',
+                'timestamp': page_view.timestamp,
+                'description': f'Viewed: {page_view.title or page_view.url}',
+                'url': page_view.url,
+                'icon': '📄'
+            })
+        
+        # Add events
+        for event in self.get_events():
+            journey.append({
+                'type': 'event',
+                'timestamp': event.timestamp,
+                'description': f'{event.category}: {event.action}',
+                'label': event.label,
+                'value': event.value,
+                'icon': '🎯'
+            })
+        
+        # Add session end if closed
+        if self.end_time:
+            journey.append({
+                'type': 'session_end',
+                'timestamp': self.end_time,
+                'description': f'Session ended - Duration: {self.get_duration_display()}',
+                'icon': '🏁'
+            })
+        
+        # Sort by timestamp
+        journey.sort(key=lambda x: x['timestamp'])
+        return journey

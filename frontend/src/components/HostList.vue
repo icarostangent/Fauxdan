@@ -149,7 +149,7 @@ export default defineComponent({
         label: `hosts_page_${page}`,
         value: page
       })
-      
+      console.log('change_page')
       emit('page-change', page)
     }
 
@@ -161,7 +161,7 @@ export default defineComponent({
         action: 'go_to_first_page',
         label: 'hosts_list'
       })
-      
+      console.log('go_to_first_page')
       emit('page-change', 1)
     }
 
@@ -175,7 +175,7 @@ export default defineComponent({
         label: `hosts_page_${lastPage}`,
         value: lastPage
       })
-      
+      console.log('go_to_last_page')
       emit('page-change', lastPage)
     }
 
@@ -190,7 +190,7 @@ export default defineComponent({
         label: `hosts_page_${prevPage}`,
         value: prevPage
       })
-      
+      console.log('go_to_previous_page')
       emit('page-change', prevPage)
     }
 
@@ -205,7 +205,7 @@ export default defineComponent({
         label: `hosts_page_${nextPage}`,
         value: nextPage
       })
-      
+      console.log('go_to_next_page')
       emit('page-change', nextPage)
     }
 

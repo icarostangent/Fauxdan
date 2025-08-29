@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
-from .models import Visitor, Session, PageView, Event
+from .models import Visitor, Session, PageView, Event, UserStory
 
 # Custom admin site header and title
 admin.site.site_header = "Fauxdan Analytics Dashboard"
@@ -225,3 +225,92 @@ class AnalyticsDashboard(LogEntry):
         verbose_name_plural = "Analytics Dashboard"
 
 admin.site.register(AnalyticsDashboard, AnalyticsDashboardAdmin)
+
+# User Story Dashboard
+class UserStoryResource(resources.ModelResource):
+    class Meta:
+        model = UserStory
+        fields = ('id', 'session_id', 'visitor__ip_address', 'start_time', 'end_time')
+        export_order = fields
+
+@admin.register(UserStory)
+class UserStoryAdmin(ImportExportModelAdmin):
+    resource_class = UserStoryResource
+    change_list_template = 'admin/user_story_dashboard.html'
+    
+    list_display = ('get_session_id', 'get_visitor_ip', 'get_device_info', 'get_start_time', 'get_duration', 'get_status', 'get_activity_summary')
+    list_filter = ('device_type', 'browser', 'start_time', 'end_time')
+    search_fields = ('session_id', 'visitor__ip_address', 'user__username')
+    readonly_fields = ('id',)
+    list_per_page = 25
+    
+    def get_session_id(self, obj):
+        return format_html('<code>{}</code>', obj.session_id[:12] + '...')
+    get_session_id.short_description = "Session ID"
+    
+    def get_visitor_ip(self, obj):
+        return format_html('<span style="color: #007cba;">{}</span>', obj.visitor.ip_address)
+    get_visitor_ip.short_description = "Visitor IP"
+    
+    def get_device_info(self, obj):
+        return format_html('{} - {}', obj.device_type.title(), obj.browser)
+    get_device_info.short_description = "Device & Browser"
+    
+    def get_start_time(self, obj):
+        return obj.start_time.strftime('%Y-%m-%d %H:%M')
+    get_start_time.short_description = "Start Time"
+    
+    def get_duration(self, obj):
+        return format_html('<span style="color: #28a745;">{}</span>', obj.get_duration_display())
+    get_duration.short_description = "Duration"
+    
+    def get_status(self, obj):
+        if obj.is_active():
+            return format_html('<span style="color: #28a745;">Active</span>')
+        else:
+            return format_html('<span style="color: #6c757d;">Closed</span>')
+    get_status.short_description = "Status"
+    
+    def get_activity_summary(self, obj):
+        page_views = obj.page_views.count()
+        events = obj.events.count()
+        return format_html('📄 {} | 🎯 {}', page_views, events)
+    get_activity_summary.short_description = "Activity Summary"
+    
+    def changelist_view(self, request, extra_context=None):
+        # Get user story statistics
+        total_sessions = Session.objects.count()
+        active_sessions = Session.objects.filter(end_time__isnull=True).count()
+        
+        # Get recent sessions with activity
+        recent_sessions = Session.objects.select_related('visitor', 'user').prefetch_related(
+            'page_views', 'events'
+        ).order_by('-start_time')[:10]
+        
+        # Get sessions by device type
+        device_stats = Session.objects.values('device_type').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Get sessions by browser
+        browser_stats = Session.objects.values('browser').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+        
+        extra_context = extra_context or {}
+        extra_context.update({
+            'total_sessions': total_sessions,
+            'active_sessions': active_sessions,
+            'recent_sessions': recent_sessions,
+            'device_stats': device_stats,
+            'browser_stats': browser_stats,
+        })
+        
+        return super().changelist_view(request, extra_context)
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'visitor', 'user'
+        ).prefetch_related(
+            'page_views', 'events'
+        )

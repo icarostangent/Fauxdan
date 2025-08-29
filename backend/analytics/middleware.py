@@ -13,15 +13,36 @@ logger = logging.getLogger(__name__)
 class AnalyticsMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # Skip analytics for certain paths
-        if request.path.startswith('/api/analytics/') or request.path.startswith('/admin/'):
+        if (request.path.startswith('/api/analytics/') or 
+            request.path.startswith('/admin/') or
+            request.path.startswith('/api/health/') or
+            request.path.startswith('/health/')):
             logger.debug(f"Skipping analytics for path: {request.path}")
             return None
             
         logger.debug(f"Analytics middleware processing: {request.path}")
             
-        # Get or create visitor
+        # Get client IP and user agent
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        # Skip analytics for localhost and internal IPs
+        if (ip_address in ['127.0.0.1', 'localhost', '::1'] or
+            ip_address.startswith('10.') or
+            ip_address.startswith('172.16.') or
+            ip_address.startswith('192.168.')):
+            logger.debug(f"Skipping analytics for internal IP: {ip_address}")
+            return None
+        
+        # Skip analytics for health check tools
+        if any(tool in user_agent.lower() for tool in ['curl', 'wget', 'healthcheck', 'docker']):
+            logger.debug(f"Skipping analytics for tool: {user_agent}")
+            return None
+        
+        # Skip analytics for Docker health checks (no user agent)
+        if not user_agent:
+            logger.debug(f"Skipping analytics for request without user agent")
+            return None
         
         logger.debug(f"Processing visitor with IP: {ip_address}")
         
