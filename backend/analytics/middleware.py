@@ -26,14 +26,6 @@ class AnalyticsMiddleware(MiddlewareMixin):
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
         
-        # Skip analytics for localhost and internal IPs
-        if (ip_address in ['127.0.0.1', 'localhost', '::1'] or
-            ip_address.startswith('10.') or
-            ip_address.startswith('172.16.') or
-            ip_address.startswith('192.168.')):
-            logger.debug(f"Skipping analytics for internal IP: {ip_address}")
-            return None
-        
         # Skip analytics for health check tools
         if any(tool in user_agent.lower() for tool in ['curl', 'wget', 'healthcheck', 'docker']):
             logger.debug(f"Skipping analytics for tool: {user_agent}")

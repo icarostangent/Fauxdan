@@ -10,6 +10,12 @@ from .serializers import EventSerializer
 from .utils import close_timed_out_sessions, get_session_stats
 import logging
 import uuid
+from django.views.generic import DetailView
+from django.template.response import TemplateResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.utils.decorators import method_decorator
+from django.utils.html import format_html
+from django.urls import path
 
 logger = logging.getLogger(__name__)
 
@@ -246,3 +252,88 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': 'Failed to get dashboard data'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+@method_decorator(staff_member_required, name='dispatch')
+class UserStoryDetailView(DetailView):
+    model = Session
+    template_name = 'admin/user_story_detail.html'
+    context_object_name = 'session'
+    
+    def get_object(self):
+        return Session.objects.select_related('visitor', 'user').prefetch_related(
+            'page_views', 'events'
+        ).get(id=self.kwargs['session_id'])
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session = self.object
+        
+        # Get user journey timeline
+        journey = []
+        
+        # Add session start
+        journey.append({
+            'type': 'session_start',
+            'timestamp': session.start_time,
+            'description': f'Session started on {session.device_type} using {session.browser}',
+            'icon': '🚀',
+            'color': '#007cba'
+        })
+        
+        # Add page views and events in chronological order
+        activities = []
+        
+        # Add page views
+        for page_view in session.page_views.all():
+            activities.append({
+                'type': 'page_view',
+                'timestamp': page_view.timestamp,
+                'description': f'Viewed: {page_view.title or page_view.url}',
+                'url': page_view.url,
+                'icon': '📄',
+                'color': '#28a745'
+            })
+        
+        # Add events
+        for event in session.events.all():
+            activities.append({
+                'type': 'event',
+                'timestamp': event.timestamp,
+                'description': f'{event.category}: {event.action}',
+                'label': event.label,
+                'value': event.value,
+                'icon': '🎯',
+                'color': '#ffc107'
+            })
+        
+        # Sort activities by timestamp
+        activities.sort(key=lambda x: x['timestamp'])
+        journey.extend(activities)
+        
+        # Add session end if closed
+        if session.end_time:
+            journey.append({
+                'type': 'session_end',
+                'timestamp': session.end_time,
+                'description': f'Session ended - Duration: {session.get_duration_display()}',
+                'icon': '🏁',
+                'color': '#6c757d'
+            })
+        
+        context.update({
+            'journey': journey,
+            'visitor_info': {
+                'ip_address': session.visitor.ip_address,
+                'user_agent': session.visitor.user_agent,
+                'is_bot': session.visitor.is_bot,
+                'total_visits': session.visitor.total_visits,
+            },
+            'session_stats': {
+                'page_views_count': session.page_views.count(),
+                'events_count': session.events.count(),
+                'duration': session.get_duration_display(),
+                'status': 'Active' if session.is_active() else 'Closed',
+            }
+        })
+        
+        return context

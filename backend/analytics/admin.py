@@ -238,7 +238,7 @@ class UserStoryAdmin(ImportExportModelAdmin):
     resource_class = UserStoryResource
     change_list_template = 'admin/user_story_dashboard.html'
     
-    list_display = ('get_session_id', 'get_visitor_ip', 'get_device_info', 'get_start_time', 'get_duration', 'get_status', 'get_activity_summary')
+    list_display = ('get_session_id', 'get_visitor_ip', 'get_device_info', 'get_start_time', 'get_duration', 'get_status', 'get_activity_summary', 'get_story_button')
     list_filter = ('device_type', 'browser', 'start_time', 'end_time')
     search_fields = ('session_id', 'visitor__ip_address', 'user__username')
     readonly_fields = ('id',)
@@ -276,6 +276,15 @@ class UserStoryAdmin(ImportExportModelAdmin):
         events = obj.events.count()
         return format_html('📄 {} | 🎯 {}', page_views, events)
     get_activity_summary.short_description = "Activity Summary"
+    
+    def get_story_button(self, obj):
+        """Custom action button for viewing user story details"""
+        return format_html(
+            '<a href="/admin/analytics/user-story/{}/view/" class="button" style="background: #28a745; color: white; padding: 4px 8px; text-decoration: none; border-radius: 3px; font-size: 0.8em;">📊 View Story</a>',
+            obj.id
+        )
+    get_story_button.short_description = "Actions"
+    get_story_button.allow_tags = True
     
     def changelist_view(self, request, extra_context=None):
         # Get user story statistics

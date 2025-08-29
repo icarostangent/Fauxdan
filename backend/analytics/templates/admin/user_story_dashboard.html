@@ -228,7 +228,7 @@
                         📄 {{ session.page_views.count }} | 🎯 {{ session.events.count }}
                     </td>
                     <td>
-                        <a href="{% url 'admin:analytics_session_change' session.id %}" class="button" style="background: #007cba; color: white; padding: 4px 8px; text-decoration: none; border-radius: 3px; font-size: 0.8em;">View</a>
+                        <a href="/analytics/user-story/{{ session.id }}/view/" class="button" style="background: #28a745; color: white; padding: 4px 8px; text-decoration: none; border-radius: 3px; font-size: 0.8em;">📊 View Story</a>
                     </td>
                 </tr>
                 {% empty %}
