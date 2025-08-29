@@ -16,9 +16,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 30s
+      retries: 5
+      start_period: 120s  # This is key - gives Django 2 minutes to start
 
   redis:
     image: redis:alpine
