@@ -1,10 +1,19 @@
-- name: Deploy Docker Compose Application
+- name: Deploy Fauxdan Application with Git Pull Strategy
   hosts: all
-  become: no
+  become: yes
   vars:
-    workspace_dir: /home/josh/workspace/fauxdan
+    workspace_dir: /fauxdan
+    git_repo: "https://gitlab.icarostangent.lab/josh/fauxdan.git"
+    git_branch: "{{ git_branch }}"
+    environment: "{{ environment }}"
 
   tasks:
+    - name: Ensure git is installed
+      become: yes
+      package:
+        name: git
+        state: present
+
     - name: Create workspace directory
       file:
         path: "{{ workspace_dir }}"
@@ -13,28 +22,154 @@
         group: josh
         mode: '0755'
 
-    - name: Copy docker-compose file
-      copy:
-        src: docker-compose.prod.yml
-        dest: "{{ workspace_dir }}/docker-compose.prod.yml"
-        mode: '0644'
+    - name: Check if repository exists
+      stat:
+        path: "{{ workspace_dir }}/.git"
+      register: git_repo_exists
+
+    - name: Clone repository if it doesn't exist
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ workspace_dir }}"
+        version: "{{ git_branch }}"
+        depth: 1
+        accept_hostkey: yes
+      when: not git_repo_exists.stat.exists
+      register: git_clone_result
+
+    - name: Update repository if it exists
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ workspace_dir }}"
+        version: "{{ git_branch }}"
+        accept_hostkey: yes
+        force: yes
+      when: git_repo_exists.stat.exists
+      register: git_pull_result
+
+    - name: Display git status
+      shell: |
+        cd {{ workspace_dir }}
+        echo "Current branch: $(git branch --show-current)"
+        echo "Latest commit: $(git log -1 --oneline)"
+        echo "Repository status:"
+        git status --porcelain
+      register: git_status_output
+
+    - name: Show git status
+      debug:
+        msg: "{{ git_status_output.stdout_lines }}"
+
+    - name: Set proper ownership for workspace
+      become: yes
+      file:
+        path: "{{ workspace_dir }}"
         owner: josh
         group: josh
-    
-    - name: Copy .env file
-      copy:
-        src: .env.prod
-        dest: "{{ workspace_dir }}/.env.prod"
-        mode: '0644'
+        recurse: yes
+
+    - name: Ensure Docker Compose is available
+    - name: Ensure Docker Compose is available
+      command: docker compose --version
+      register: docker_compose_version
+      changed_when: false
+      # This task will fail and exit the playbook if 'docker compose' is not found or not executable.
+      # The 'command' module automatically fails on non-zero exit codes.
+
+    - name: Check if .env.{{ environment }} is present
+      file:
+        path: "{{ workspace_dir }}/.env.{{ environment }}"
+        state: file
         owner: josh
         group: josh
+        mode: '0644'
 
-    - name: Pull Docker images
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod pull
+    - name: Create .env.{{ environment }} file from Gitlab Project Variable Secrets
+      gitlab:
+        project: "{{ gitlab_project }}"
+        path: ".env.{{ environment }}"
+        private_token: "{{ gitlab_token }}"
+
+    - name: Pull latest Docker images
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} pull
       args:
         chdir: "{{ workspace_dir }}"
+      register: docker_pull_result
 
-    - name: Start Docker Compose
-      shell: docker compose -f {{ workspace_dir }}/docker-compose.prod.yml --env-file {{ workspace_dir }}/.env.prod up -d --remove-orphans
+    - name: Show Docker pull results
+      debug:
+        msg: "{{ docker_pull_result.stdout_lines }}"
+
+    - name: Start Docker Compose services
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
+      register: docker_up_result
+
+    - name: Show Docker up results
+      debug:
+        msg: "{{ docker_up_result.stdout_lines }}"
+
+    - name: Wait for services to be ready
+      wait_for:
+        host: localhost
+        port: "{{ item }}"
+        delay: 10
+        timeout: 300
+        state: started
+      loop:
+        - 80
+        - 443
+
+    - name: Check service health
+      uri:
+        url: "http://localhost:8000/api/health/"
+        method: GET
+        status_code: [200, 404]  # 404 is acceptable for health endpoint
+        timeout: 30
+      retries: 5
+      delay: 10
+      register: health_check_result
+
+    - name: Show health check results
+      debug:
+        msg: "Health check status: {{ health_check_result.status }}"
+
+    - name: Verify Docker services are running
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} ps
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: docker_ps_result
+
+    - name: Show running services
+      debug:
+        msg: "{{ docker_ps_result.stdout_lines }}"
+
+    - name: Check for any failed containers
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} ps --filter "status=exited"
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: failed_containers
+      failed_when: failed_containers.stdout_lines | length > 1  # More than just header
+
+    - name: Deployment summary
+      debug:
+        msg: |
+          ========================================
+          DEPLOYMENT SUMMARY
+          ========================================
+          Repository: {{ git_repo }}
+          Branch: {{ git_branch }}
+          Environment: {{ environment }}
+          Workspace: {{ workspace_dir }}
+          Latest Commit: {{ git_status_output.stdout_lines[1] if git_status_output.stdout_lines | length > 1 else 'Unknown' }}
+          Health Check: {{ health_check_result.status }}
+          ========================================
