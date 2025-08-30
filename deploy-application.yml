@@ -3,21 +3,43 @@
   become: yes
   vars:
     workspace_dir: /fauxdan
-    git_repo: "https://gitlab.icarostangent.lab/josh/fauxdan.git"
+    git_repo: "ssh://git@gitlab.icarostangent.lab:2222/josh/fauxdan.git"
     git_branch: master
 
   tasks:
+    - name: Check if ~/.ssh directory exists
+      stat:
+        path: ~/.ssh
+      register: ssh_dir_stat
+
+    - name: Check if SSH private key exists
+      stat:
+        path: ~/.ssh/id_rsa
+      register: ssh_key_stat
+      when: ssh_dir_stat.stat.exists
+
+    - name: Create SSH directory if it doesn't exist
+      file:
+        path: ~/.ssh
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+      when: not ssh_dir_stat.stat.exists
+      
+    - name: Create SSH keys if they don't exist
+      shell: |
+        echo "$FAUXDAN_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        echo "$FAUXDAN_SSH_PUBLIC_KEY" > ~/.ssh/id_rsa.pub
+        chmod 644 ~/.ssh/id_rsa.pub
+      when: not ssh_key_stat.stat.exists
+
     - name: Ensure git is installed
       become: yes
       package:
         name: git
         state: present
-
-    - name: Configure Git to trust self-signed certificate
-      shell: |
-        git config --global http.sslVerify false
-        git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
-      become: yes
 
     - name: Create workspace directory
       file:
