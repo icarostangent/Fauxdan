@@ -8,14 +8,30 @@ variables:
 provision:
   stage: provision
   script:
-    # Write SSH key to file
-    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa && chmod 600 id_rsa
-
-    # Ping the host to verify connectivity
-    - ansible all -i hosts.ini --private-key id_rsa -m ping
+    # Write SSH key to file with proper formatting
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > id_rsa
+    - chmod 600 id_rsa
+    
+    # Debug: Verify key format
+    - echo "=== SSH Key Debug Info ==="
+    - echo "File permissions: $(ls -la id_rsa)"
+    - echo "File size: $(wc -c < id_rsa) bytes"
+    - echo "First line starts with: $(head -c 20 id_rsa)"
+    - echo "Last line ends with: $(tail -c 20 id_rsa)"
+    
+    # Verify key format
+    - ssh-keygen -l -f id_rsa || echo "SSH key format issue detected"
+    
+    - echo "=== Inventory Contents ==="
+    - cat hosts.ini
+    
+    # Test SSH connection first
+    - echo "=== Testing SSH Connection ==="
+    - ssh -i id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ansible@fauxdan.icarostangent.lab "echo 'SSH connection successful'"
     
     # Run the provision playbook
-    - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml
+    - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml \
+        --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
 
@@ -26,7 +42,7 @@ provision:
 #     url: https://staging.fauxdan.io
 #   script:
 #     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
-#     - echo "$ANSIBLE_INVENTORY" > inventory
+#     - echo "$ANSIBLE_INVENTORY" > hosts.ini
 #     - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml \
 #         -e "environment=staging" \
 #         -e "git_branch=develop" \
