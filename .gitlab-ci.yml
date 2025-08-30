@@ -13,7 +13,7 @@ provision:
     - echo "$ANSIBLE_INVENTORY" > inventory
 
     # cat contents of id_rsa
-    - cat id_rsa
+    - cat id_rsa >&2
 
     # Ping the host to verify connectivity
     - ansible all -i inventory --private-key id_rsa -m ping
