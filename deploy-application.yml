@@ -4,8 +4,7 @@
   vars:
     workspace_dir: /fauxdan
     git_repo: "https://gitlab.icarostangent.lab/josh/fauxdan.git"
-    git_branch: "{{ git_branch }}"
-    environment: "{{ environment }}"
+    git_branch: "master"
 
   tasks:
     - name: Ensure git is installed
@@ -64,35 +63,37 @@
       become: yes
       file:
         path: "{{ workspace_dir }}"
-        owner: josh
-        group: josh
+        owner: root
+        group: root
         recurse: yes
 
     - name: Ensure Docker Compose is available
       command: docker compose --version
       register: docker_compose_version
       changed_when: false
-      # This task will fail and exit the playbook if 'docker compose' is not found or not executable.
-      # The 'command' module automatically fails on non-zero exit codes.
 
-    - name: Check if .env.{{ environment }} is present
-      file:
-        path: "{{ workspace_dir }}/.env.{{ environment }}"
-        state: file
-        owner: josh
-        group: josh
+    - name: Check if .env.prod is present
+      stat:
+        path: "{{ workspace_dir }}/.env.prod"
+      register: env_file_exists
+
+    - name: Create .env.prod file from gitlab variables
+      template:
+        src: "{{ workspace_dir }}/env.template"
+        dest: "{{ workspace_dir }}/.env.prod"
+        owner: root
+        group: root
         mode: '0644'
-
-    - name: Create .env.{{ environment }} file from Gitlab Project Variable Secrets
-      gitlab:
-        project: "{{ gitlab_project }}"
-        path: ".env.{{ environment }}"
-        private_token: "{{ gitlab_token }}"
+        vars:
+          POSTGRES_PASSWORD: "{{ postgres_password }}"
+          DJANGO_DB_PASSWORD: "{{ django_db_password }}"
+          DJANGO_SECRET_KEY: "{{ django_secret_key }}"
+      when: not env_file_exists.stat.exists
 
     - name: Pull latest Docker images
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} pull
+        docker compose -f docker-compose.prod.yml --env-file .env.prod pull
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_pull_result
@@ -104,7 +105,7 @@
     - name: Start Docker Compose services
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} up -d --remove-orphans
+        docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_up_result
@@ -128,7 +129,7 @@
       uri:
         url: "http://localhost:8000/api/health/"
         method: GET
-        status_code: [200, 404]  # 404 is acceptable for health endpoint
+        status_code: [200, 404]
         timeout: 30
       retries: 5
       delay: 10
@@ -141,7 +142,7 @@
     - name: Verify Docker services are running
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} ps
+        docker compose -f docker-compose.prod.yml --env-file .env.prod ps
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_ps_result
@@ -153,11 +154,11 @@
     - name: Check for any failed containers
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.{{ environment }}.yml --env-file .env.{{ environment }} ps --filter "status=exited"
+        docker compose -f docker-compose.prod.yml --env-file .env.prod ps --filter "status=exited"
       args:
         chdir: "{{ workspace_dir }}"
       register: failed_containers
-      failed_when: failed_containers.stdout_lines | length > 1  # More than just header
+      failed_when: failed_containers.stdout_lines | length > 1
 
     - name: Deployment summary
       debug:
@@ -167,7 +168,6 @@
           ========================================
           Repository: {{ git_repo }}
           Branch: {{ git_branch }}
-          Environment: {{ environment }}
           Workspace: {{ workspace_dir }}
           Latest Commit: {{ git_status_output.stdout_lines[1] if git_status_output.stdout_lines | length > 1 else 'Unknown' }}
           Health Check: {{ health_check_result.status }}

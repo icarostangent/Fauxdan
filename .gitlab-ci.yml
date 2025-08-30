@@ -12,7 +12,7 @@ provision:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
     - ansible all -i hosts.ini --private-key id_rsa -m ping
-    - ansible-playbook -K -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ansible_become_password"
+    - ansible-playbook -K -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
 
@@ -39,7 +39,10 @@ deploy:production:
   script:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
-    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml -e "environment=prod" -e "git_branch=master" -e "ansible_become_password=$"
+    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
+        -e "ansible_become_password=$ROOT_PASSWORD" \
+        -e "django_db_password=$DJANGO_DB_PASSWORD" \
+        -e "django_secret_key=$DJANGO_SECRET_KEY"
   only:
     - master
   when: manual
