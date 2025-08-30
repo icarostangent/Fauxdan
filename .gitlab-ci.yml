@@ -8,18 +8,8 @@ variables:
 provision:
   stage: provision
   script:
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > id_rsa
+    - echo "$SSH_PRIVATE_KEY" | bbase64 -d | tr -d '\r' > id_rsa
     - chmod 600 id_rsa
-    - echo "=== SSH Key Debug Info ==="
-    - ls -la id_rsa
-    - wc -c id_rsa
-    - head -c 20 id_rsa
-    - tail -c 20 id_rsa
-    - ssh-keygen -l -f id_rsa || echo "SSH key format issue detected"
-    - echo "=== Inventory Contents ==="
-    - cat hosts.ini
-    - echo "=== Testing SSH Connection ==="
-    - ssh -i id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ansible@fauxdan.icarostangent.lab "echo 'SSH connection successful'"
     - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
