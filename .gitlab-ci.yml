@@ -31,6 +31,5 @@ deploy:production:
         -e "postgres_password=$POSTGRES_PASSWORD"
   only:
     - master
-  when: manual
   needs:
     - provision
