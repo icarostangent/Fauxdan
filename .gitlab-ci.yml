@@ -10,16 +10,12 @@ provision:
   script:
     # Write SSH key and inventory to files
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa && chmod 600 id_rsa
-    - echo "$ANSIBLE_INVENTORY" > inventory
-
-    # cat contents of id_rsa
-    - cat id_rsa >&2
 
     # Ping the host to verify connectivity
     - ansible all -i inventory --private-key id_rsa -m ping
     
     # Run the provision playbook
-    - ansible-playbook -i inventory --private-key id_rsa provision-server.yml
+    - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml
   only:
     - master
 
@@ -46,8 +42,7 @@ deploy:
     name: prod
   script:
     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
-    - echo "$ANSIBLE_INVENTORY" > inventory
-    - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml \
+    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
         -e "environment=prod" \
         -e "git_branch=master" \
         -e "ansible_become_password=$ANSIBLE_BECOME_PASSWORD"
