@@ -98,16 +98,16 @@
       register: env_file_exists
 
     - name: Create .env.prod file from gitlab variables
-      ansible.builtin.template:
-        src: env.template
+      template:
+        src: "./env.template"
         dest: "{{ workspace_dir }}/.env.prod"
         owner: root
         group: root
         mode: '0644'
-        vars:
-          POSTGRES_PASSWORD: "{{ postgres_password }}"
-          DJANGO_DB_PASSWORD: "{{ django_db_password }}"
-          DJANGO_SECRET_KEY: "{{ django_secret_key }}"
+      vars:
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        DJANGO_DB_PASSWORD: "{{ django_db_password }}"
+        DJANGO_SECRET_KEY: "{{ django_secret_key }}"
       when: not env_file_exists.stat.exists
 
     - name: Pull latest Docker images
