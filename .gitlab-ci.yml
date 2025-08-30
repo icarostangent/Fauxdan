@@ -16,22 +16,6 @@ provision:
   only:
     - master
 
-# deploy:staging:
-#   stage: deploy
-#   environment:
-#     name: staging
-#     url: https://staging.fauxdan.io
-#   script:
-#     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
-#     - echo "$ANSIBLE_INVENTORY" > hosts.ini
-#     - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml \
-#         -e "environment=staging" \
-#         -e "git_branch=develop" \
-#         -e "gitlab_project=josh/fauxdan" \
-#         -e "gitlab_token=$GITLAB_TOKEN"
-#   only:
-#     - develop
-
 deploy:production:
   stage: deploy
   environment:
@@ -39,10 +23,12 @@ deploy:production:
   script:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
-    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
+    - |
+      ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
         -e "ansible_become_password=$ROOT_PASSWORD" \
         -e "django_db_password=$DJANGO_DB_PASSWORD" \
-        -e "django_secret_key=$DJANGO_SECRET_KEY"
+        -e "django_secret_key=$DJANGO_SECRET_KEY" \
+        -e "postgres_password=$POSTGRES_PASSWORD"
   only:
     - master
   when: manual
