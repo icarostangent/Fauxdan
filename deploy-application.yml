@@ -98,8 +98,8 @@
       register: env_file_exists
 
     - name: Create .env.prod file from gitlab variables
-      template:
-        src: "env.template"
+      ansible.builtin.template:
+        src: env.template
         dest: "{{ workspace_dir }}/.env.prod"
         owner: root
         group: root
