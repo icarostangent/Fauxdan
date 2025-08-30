@@ -159,7 +159,7 @@
 
     - name: Check service health
       uri:
-        url: "https://localhost/api/health/"
+        url: "https://fauxdan.io/api/health/"
         method: GET
         status_code: [200, 404]
         timeout: 30
