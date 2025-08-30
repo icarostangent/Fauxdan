@@ -159,7 +159,7 @@
 
     - name: Check service health
       uri:
-        url: "http://localhost/api/health/"
+        url: "https://localhost/api/health/"
         method: GET
         status_code: [200, 404]
         timeout: 30
