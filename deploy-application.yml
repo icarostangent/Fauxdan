@@ -3,8 +3,8 @@
   become: yes
   vars:
     workspace_dir: /fauxdan
-    git_repo: "https://gitlab.icarostangent.lab/josh/fauxdan.git"
-    git_branch: "master"
+    git_repo: git@gitlab.icarostangent.lab:josh/fauxdan.git
+    git_branch: master
 
   tasks:
     - name: Ensure git is installed
