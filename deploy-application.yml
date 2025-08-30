@@ -5,8 +5,6 @@
     workspace_dir: /fauxdan
     git_repo: "ssh://git@gitlab.icarostangent.lab:2222/josh/fauxdan.git"
     git_branch: master
-    fauxdan_ssh_private_key: "{{ fauxdan_ssh_private_key }}"
-    fauxdan_ssh_public_key: "{{ fauxdan_ssh_public_key }}"
 
   tasks:
     - name: Check if ~/.ssh directory exists
