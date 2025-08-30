@@ -1,5 +1,6 @@
 stages:
   - provision
+  - build
   - deploy
 
 variables:
@@ -15,6 +16,19 @@ provision:
     - ansible-playbook -K -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
+
+build:production:
+  stage: build
+  before_script:
+    - echo "$GITLAB_REGISTRY_PASSWORD" | docker login gitlab.icarostangent.lab:5050 -u $GITLAB_REGISTRY_USERNAME --password-stdin
+  script:
+    - docker compose -f docker-compose.build.yml build
+    - docker compose -f docker-compose.build.yml push
+    - docker system prune -f
+  only:
+    - master
+  tags:
+    - docker
 
 deploy:production:
   stage: deploy
@@ -37,3 +51,4 @@ deploy:production:
     - master
   needs:
     - provision
+    - build:production
