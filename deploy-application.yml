@@ -13,12 +13,18 @@
         name: git
         state: present
 
+    - name: Configure Git to trust self-signed certificate
+      shell: |
+        git config --global http.sslVerify false
+        git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
+      become: yes
+
     - name: Create workspace directory
       file:
         path: "{{ workspace_dir }}"
         state: directory
-        owner: josh
-        group: josh
+        owner: root
+        group: root
         mode: '0755'
 
     - name: Check if repository exists
@@ -33,7 +39,6 @@
         version: "{{ git_branch }}"
         depth: 1
         accept_hostkey: yes
-        git_opts: "--config http.sslVerify=false"
       when: not git_repo_exists.stat.exists
       register: git_clone_result
 
@@ -44,7 +49,6 @@
         version: "{{ git_branch }}"
         accept_hostkey: yes
         force: yes
-        git_opts: "--config http.sslVerify=false"
       when: git_repo_exists.stat.exists
       register: git_pull_result
 
