@@ -69,7 +69,6 @@
         recurse: yes
 
     - name: Ensure Docker Compose is available
-    - name: Ensure Docker Compose is available
       command: docker compose --version
       register: docker_compose_version
       changed_when: false
