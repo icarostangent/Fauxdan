@@ -5,6 +5,8 @@
     workspace_dir: /fauxdan
     git_repo: "ssh://git@gitlab.icarostangent.lab:2222/josh/fauxdan.git"
     git_branch: master
+    gitlab_registry_username: "{{ gitlab_registry_username }}"
+    gitlab_registry_password: "{{ gitlab_registry_password }}"
 
   tasks:
     - name: Check if ~/.ssh directory exists
@@ -109,6 +111,16 @@
         DJANGO_DB_PASSWORD: "{{ django_db_password }}"
         DJANGO_SECRET_KEY: "{{ django_secret_key }}"
       when: not env_file_exists.stat.exists
+
+    - name: Login to GitLab Container Registry
+      shell: |
+        echo "{{ gitlab_registry_password }}" | docker login gitlab.icarostangent.lab:5050 -u "{{ gitlab_registry_username }}" --password-stdin
+      register: docker_login_result
+      changed_when: false
+
+    - name: Show Docker login result
+      debug:
+        msg: "{{ docker_login_result.stdout_lines }}"
 
     - name: Pull latest Docker images
       shell: |
