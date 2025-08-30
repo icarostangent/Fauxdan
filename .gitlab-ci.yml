@@ -8,14 +8,19 @@ variables:
 provision:
   stage: provision
   script:
-    # Write SSH key to file
-    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa && chmod 600 id_rsa
-
-    # Ping the host to verify connectivity
-    - ansible all -i hosts.ini --private-key id_rsa -m ping
-    
-    # Run the provision playbook
-    - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > id_rsa
+    - chmod 600 id_rsa
+    - echo "=== SSH Key Debug Info ==="
+    - ls -la id_rsa
+    - wc -c id_rsa
+    - head -c 20 id_rsa
+    - tail -c 20 id_rsa
+    - ssh-keygen -l -f id_rsa || echo "SSH key format issue detected"
+    - echo "=== Inventory Contents ==="
+    - cat hosts.ini
+    - echo "=== Testing SSH Connection ==="
+    - ssh -i id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ansible@fauxdan.icarostangent.lab "echo 'SSH connection successful'"
+    - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
 
@@ -26,7 +31,7 @@ provision:
 #     url: https://staging.fauxdan.io
 #   script:
 #     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
-#     - echo "$ANSIBLE_INVENTORY" > inventory
+#     - echo "$ANSIBLE_INVENTORY" > hosts.ini
 #     - ansible-playbook -i inventory --private-key id_rsa deploy-application.yml \
 #         -e "environment=staging" \
 #         -e "git_branch=develop" \
@@ -36,16 +41,13 @@ provision:
 #     - develop
 #   when: manual
 
-deploy:
+deploy:production:
   stage: deploy
   environment:
     name: prod
   script:
     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
-    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
-        -e "environment=prod" \
-        -e "git_branch=master" \
-        -e "ansible_become_password=$ANSIBLE_BECOME_PASSWORD"
+    - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml -e "environment=prod" -e "git_branch=master" -e "ansible_become_password=$ANSIBLE_BECOME_PASSWORD"
   only:
     - master
   when: manual
