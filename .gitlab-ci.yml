@@ -8,8 +8,10 @@ variables:
 provision:
   stage: provision
   script:
-    - echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' > id_rsa
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - cat id_rsa
     - chmod 600 id_rsa
+    - ansible all -i hosts.ini --private-key id_rsa -m ping
     - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
   only:
     - master
@@ -36,7 +38,8 @@ deploy:production:
   environment:
     name: prod
   script:
-    - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
     - ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml -e "environment=prod" -e "git_branch=master" -e "ansible_become_password=$ANSIBLE_BECOME_PASSWORD"
   only:
     - master
