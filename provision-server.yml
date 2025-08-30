@@ -24,7 +24,6 @@
           - software-properties-common
         state: present
 
-    # Docker Installation
     - name: Create keyrings directory
       file:
         path: /etc/apt/keyrings
