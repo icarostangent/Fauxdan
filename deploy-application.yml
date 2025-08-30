@@ -14,12 +14,6 @@
         path: ~/.ssh
       register: ssh_dir_stat
 
-    - name: Check if SSH private key exists
-      stat:
-        path: ~/.ssh/id_rsa
-      register: ssh_key_stat
-      when: ssh_dir_stat.stat.exists
-
     - name: Create SSH directory if it doesn't exist
       file:
         path: ~/.ssh
@@ -29,6 +23,12 @@
         group: root
       when: not ssh_dir_stat.stat.exists
       
+    - name: Check if SSH private key exists
+      stat:
+        path: ~/.ssh/id_rsa
+      register: ssh_key_stat
+      when: ssh_dir_stat.stat.exists
+
     - name: Create SSH keys if they don't exist
       shell: |
         echo "{{ fauxdan_ssh_private_key }}" | base64 -d > ~/.ssh/id_rsa
