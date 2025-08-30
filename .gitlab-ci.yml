@@ -11,10 +11,10 @@ provision:
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > id_rsa
     - chmod 600 id_rsa
     - echo "=== SSH Key Debug Info ==="
-    - echo "File permissions: $(ls -la id_rsa)"
-    - echo "File size: $(wc -c < id_rsa) bytes"
-    - echo "First line starts with: $(head -c 20 id_rsa)"
-    - echo "Last line ends with: $(tail -c 20 id_rsa)"
+    - ls -la id_rsa
+    - wc -c id_rsa
+    - head -c 20 id_rsa
+    - tail -c 20 id_rsa
     - ssh-keygen -l -f id_rsa || echo "SSH key format issue detected"
     - echo "=== Inventory Contents ==="
     - cat hosts.ini
