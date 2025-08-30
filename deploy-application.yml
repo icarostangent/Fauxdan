@@ -87,14 +87,6 @@
       debug:
         msg: "{{ git_status_output.stdout_lines }}"
 
-    - name: Set proper ownership for workspace
-      become: yes
-      file:
-        path: "{{ workspace_dir }}"
-        owner: root
-        group: root
-        recurse: yes
-
     - name: Ensure Docker Compose is available
       command: docker compose --version
       register: docker_compose_version
@@ -107,7 +99,7 @@
 
     - name: Create .env.prod file from gitlab variables
       template:
-        src: "{{ workspace_dir }}/env.template"
+        src: "env.template"
         dest: "{{ workspace_dir }}/.env.prod"
         owner: root
         group: root
