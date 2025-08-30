@@ -11,6 +11,10 @@ provision:
     # Write SSH key and inventory to files
     - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
     - echo "$ANSIBLE_INVENTORY" > inventory
+
+    # Ping the host to verify connectivity
+    - ansible all -i inventory --private-key id_rsa -m ping
+    
     # Run the provision playbook
     - ansible-playbook -i inventory --private-key id_rsa provision-server.yml
   only:
