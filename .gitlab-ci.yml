@@ -8,11 +8,11 @@ variables:
 provision:
   stage: provision
   script:
-    # Write SSH key and inventory to files
+    # Write SSH key to file
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa && chmod 600 id_rsa
 
     # Ping the host to verify connectivity
-    - ansible all -i inventory --private-key id_rsa -m ping
+    - ansible all -i hosts.ini --private-key id_rsa -m ping
     
     # Run the provision playbook
     - ansible-playbook -i hosts.ini --private-key id_rsa provision-server.yml
