@@ -3,7 +3,7 @@
   become: yes
   vars:
     workspace_dir: /fauxdan
-    git_repo: git@gitlab.icarostangent.lab:josh/fauxdan.git
+    git_repo: "https://gitlab.icarostangent.lab/josh/fauxdan.git"
     git_branch: master
 
   tasks:
@@ -33,6 +33,7 @@
         version: "{{ git_branch }}"
         depth: 1
         accept_hostkey: yes
+        git_opts: "--config http.sslVerify=false"
       when: not git_repo_exists.stat.exists
       register: git_clone_result
 
@@ -43,6 +44,7 @@
         version: "{{ git_branch }}"
         accept_hostkey: yes
         force: yes
+        git_opts: "--config http.sslVerify=false"
       when: git_repo_exists.stat.exists
       register: git_pull_result
 
