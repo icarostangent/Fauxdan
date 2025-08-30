@@ -9,7 +9,7 @@ provision:
   stage: provision
   script:
     # Write SSH key and inventory to files
-    - echo "$SSH_PRIVATE_KEY" > id_rsa && chmod 600 id_rsa
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa && chmod 600 id_rsa
     - echo "$ANSIBLE_INVENTORY" > inventory
 
     # Ping the host to verify connectivity
