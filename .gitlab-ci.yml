@@ -21,6 +21,8 @@ deploy:production:
   environment:
     name: prod
   script:
+    - echo "$FAUXDAN_SSH_PRIVATE_KEY" | base64 -d
+    - echo "$FAUXDAN_SSH_PUBLIC_KEY"
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
     - |
@@ -29,6 +31,8 @@ deploy:production:
         -e "django_db_password=$DJANGO_DB_PASSWORD" \
         -e "django_secret_key=$DJANGO_SECRET_KEY" \
         -e "postgres_password=$POSTGRES_PASSWORD"
+        -e "fauxdan_ssh_private_key=$FAUXDAN_SSH_PRIVATE_KEY"
+        -e "fauxdan_ssh_public_key=$FAUXDAN_SSH_PUBLIC_KEY"
   only:
     - master
   needs:
