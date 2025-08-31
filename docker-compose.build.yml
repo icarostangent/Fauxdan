@@ -17,7 +17,7 @@ services:
       context: ./
       dockerfile: ./caddy/Dockerfile
       args:
-        VUE_APP_API_URL: ${VUE_APP_API_URL}
+        VUE_APP_API_URL: __RUNTIME_API_URL__
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
