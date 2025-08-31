@@ -157,6 +157,19 @@
         - 80
         - 443
 
+    - name: Check Caddy logs
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.prod.yml --env-file .env.prod logs caddy
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: caddy_logs
+      failed_when: false
+
+    - name: Show Caddy logs
+      debug:
+        msg: "{{ caddy_logs.stdout_lines }}"
+
     - name: Check service health
       uri:
         url: "https://fauxdan.io/api/health/"
