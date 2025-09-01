@@ -12,7 +12,7 @@ backup:master:
   script:
     - echo "Creating backup of master branch..."
     - echo "Debug info: CI_API_V4_URL=$CI_API_V4_URL, CI_PROJECT_ID=$CI_PROJECT_ID"
-    - >
+    - |
       # Create backup using GitLab API (requires CI_JOB_TOKEN)
       BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
       COMMIT_SHA=$(git rev-parse HEAD)
@@ -33,7 +33,7 @@ backup:master:
       else
         echo "Warning: Tag creation may have failed"
       fi
-    - >
+    - |
       # Also create a backup branch using GitLab API
       BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
       
