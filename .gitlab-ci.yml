@@ -12,9 +12,24 @@ backup:master:
   script:
     - echo "Creating backup of master branch..."
     - |
-      # Create backup using GitLab API
-      BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
+      # Create backup using GitLab API with source branch info
       COMMIT_SHA=$(git rev-parse HEAD)
+      
+      # Get source branch information
+      if [ -n "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" ]; then
+        SOURCE_BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+        BACKUP_TAG="backup-${SOURCE_BRANCH}-$(date +%Y%m%d-%H%M%S)"
+        BACKUP_BRANCH="backup/${SOURCE_BRANCH}-$(date +%Y%m%d-%H%M%S)"
+        BACKUP_MESSAGE="Automated backup from merge request: $CI_MERGE_REQUEST_TITLE (Source: $SOURCE_BRANCH)"
+        echo "Creating backup from merge request: $CI_MERGE_REQUEST_TITLE"
+        echo "Source branch: $SOURCE_BRANCH"
+      else
+        # Fallback for direct pushes to master
+        BACKUP_TAG="backup-master-$(date +%Y%m%d-%H%M%S)"
+        BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
+        BACKUP_MESSAGE="Automated backup before deployment (Direct push to master)"
+        echo "Creating backup from direct push to master"
+      fi
       
       echo "Creating backup tag: $BACKUP_TAG for commit: $COMMIT_SHA"
       
@@ -22,13 +37,12 @@ backup:master:
       curl --request POST \
         --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
         --header "Content-Type: application/json" \
-        --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"Automated backup before deployment\"}" \
+        --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"$BACKUP_MESSAGE\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
       
       echo "Backup tag created: $BACKUP_TAG"
       
       # Create backup branch
-      BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
       echo "Creating backup branch: $BACKUP_BRANCH"
       
       curl --request POST \
