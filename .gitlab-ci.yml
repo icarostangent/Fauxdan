@@ -11,6 +11,7 @@ backup:master:
   stage: backup
   script:
     - echo "Creating backup of master branch..."
+    - echo "Debug info: CI_API_V4_URL=$CI_API_V4_URL, CI_PROJECT_ID=$CI_PROJECT_ID"
     - |
       # Create backup using GitLab API (requires CI_JOB_TOKEN)
       BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
@@ -18,25 +19,48 @@ backup:master:
       
       echo "Creating backup tag: $BACKUP_TAG for commit: $COMMIT_SHA"
       
-      # Create tag using GitLab API
-      curl --request POST \
+      # Create tag using GitLab API with verbose output
+      TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
         --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"Automated backup before deployment\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags")
       
-      echo "Backup tag created successfully: $BACKUP_TAG"
+      echo "Tag creation response: $TAG_RESPONSE"
+      
+      if echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+        echo "Backup tag created successfully: $BACKUP_TAG"
+      else
+        echo "Warning: Tag creation may have failed"
+      fi
     - |
       # Also create a backup branch using GitLab API
       BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
       
-      curl --request POST \
+      echo "Creating backup branch: $BACKUP_BRANCH for commit: $COMMIT_SHA"
+      
+      # Create branch using GitLab API with verbose output
+      BRANCH_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
         --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches"
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches")
       
-      echo "Backup branch created successfully: $BACKUP_BRANCH"
+      echo "Branch creation response: $BRANCH_RESPONSE"
+      
+      if echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+        echo "Backup branch created successfully: $BACKUP_BRANCH"
+      else
+        echo "Warning: Branch creation may have failed"
+        # Try alternative approach - create branch from current HEAD
+        echo "Attempting alternative branch creation method..."
+        ALT_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
+          --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+          --header "Content-Type: application/json" \
+          --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"master\"}" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches")
+        echo "Alternative branch creation response: $ALT_RESPONSE"
+      fi
   only:
     - master
   when: always
