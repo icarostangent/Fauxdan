@@ -2,6 +2,8 @@ services:
   backend:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
     restart: unless-stopped
+    expose:
+      - "8000"
     volumes:
       - staticfiles:/app/staticfiles
     environment:
@@ -29,6 +31,8 @@ services:
   backend-admin:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
     restart: unless-stopped
+    expose:
+      - "8000"
     volumes:
       - staticfiles:/app/staticfiles
     environment:
@@ -39,7 +43,6 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - DJANGO_ADMIN_PORT=8001
       - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
     depends_on:
       db:
@@ -47,7 +50,7 @@ services:
       redis:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
       interval: 30s
       timeout: 30s
       retries: 5
