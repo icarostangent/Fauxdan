@@ -11,20 +11,32 @@ backup:master:
   stage: backup
   script:
     - echo "Creating backup of master branch..."
-    - git config --global user.email "ci@gitlab.com"
-    - git config --global user.name "GitLab CI"
     - |
-      # Create backup branch with timestamp
-      BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
-      git checkout -b "$BACKUP_BRANCH"
-      git push origin "$BACKUP_BRANCH"
-      echo "Backup created: $BACKUP_BRANCH"
-    - |
-      # Also create a tag for easy reference
+      # Create backup using GitLab API (requires CI_JOB_TOKEN)
       BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
-      git tag "$BACKUP_TAG"
-      git push origin "$BACKUP_TAG"
-      echo "Backup tag created: $BACKUP_TAG"
+      COMMIT_SHA=$(git rev-parse HEAD)
+      
+      echo "Creating backup tag: $BACKUP_TAG for commit: $COMMIT_SHA"
+      
+      # Create tag using GitLab API
+      curl --request POST \
+        --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"Automated backup before deployment\"}" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
+      
+      echo "Backup tag created successfully: $BACKUP_TAG"
+    - |
+      # Also create a backup branch using GitLab API
+      BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
+      
+      curl --request POST \
+        --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches"
+      
+      echo "Backup branch created successfully: $BACKUP_BRANCH"
   only:
     - master
   when: always
