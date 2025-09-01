@@ -1,0 +1,132 @@
+groups:
+  - name: fauxdan-dev-alerts
+    rules:
+      # Service availability alerts
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for more than 5 minutes"
+
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage is above 85% for more than 5 minutes"
+
+      # Redis connection issues
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis exporter cannot connect to Redis instance"
+
+      # PostgreSQL connection issues
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL exporter cannot connect to database"
+
+      # High PostgreSQL connection count
+      - alert: PostgresHighConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL connection count"
+          description: "PostgreSQL has more than 80 active connections"
+
+      # High PostgreSQL transaction rate
+      - alert: PostgresHighTransactionRate
+        expr: rate(pg_stat_database_xact_commit[5m]) + rate(pg_stat_database_xact_rollback[5m]) > 1000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL transaction rate"
+          description: "PostgreSQL transaction rate is above 1000 per second"
+
+      # High PostgreSQL deadlock rate
+      - alert: PostgresHighDeadlockRate
+        expr: rate(pg_stat_database_deadlocks[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL deadlock rate"
+          description: "PostgreSQL deadlock rate is above 0.1 per second"
+
+      # High PostgreSQL replication conflicts
+      - alert: PostgresHighReplicationConflicts
+        expr: rate(pg_stat_database_conflicts[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL replication conflicts"
+          description: "PostgreSQL replication conflict rate is above 0.1 per second"
+
+      # High PostgreSQL I/O time
+      - alert: PostgresHighIOTime
+        expr: (pg_stat_database_blk_read_time + pg_stat_database_blk_write_time) / 1000 > 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL I/O time"
+          description: "PostgreSQL I/O time is above 60 seconds"
+
+      # High response time for Django backend
+      - alert: DjangoHighResponseTime
+        expr: http_request_duration_seconds{job="django-backend"} > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time for Django backend"
+          description: "Django backend response time is above 2 seconds"
+
+      # High error rate for Django backend
+      - alert: DjangoHighErrorRate
+        expr: rate(http_requests_total{job="django-backend", status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate for Django backend"
+          description: "Django backend error rate is above 10%"

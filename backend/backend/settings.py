@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
     'internet',
     'analytics',
+    'metrics',
 ]
 
 MIDDLEWARE = [
@@ -64,6 +65,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'analytics.middleware.AnalyticsMiddleware',
+    'metrics.metrics.MetricsMiddleware',
+    'metrics.metrics.DatabaseMetricsMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
