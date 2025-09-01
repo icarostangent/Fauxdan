@@ -102,8 +102,8 @@ services:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
     restart: unless-stopped
     ports:
-      - "enp1s0:80:80"
-      - "enp1s0:443:443"
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
     environment:
       - VUE_APP_API_URL=${VUE_APP_API_URL}
     volumes:
@@ -119,7 +119,7 @@ services:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
     restart: unless-stopped
     ports:
-      - "wg0:8443:8443"
+      - "127.0.0.1:8443:8443"
     volumes:
       - ./caddy/Caddyfile.admin:/etc/caddy/Caddyfile
       - caddy_data:/data
