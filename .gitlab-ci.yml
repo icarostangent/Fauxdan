@@ -1,10 +1,33 @@
 stages:
+  - backup
   - provision
   - build
   - deploy
 
 variables:
   ANSIBLE_HOST_KEY_CHECKING: "False"
+
+backup:master:
+  stage: backup
+  script:
+    - echo "Creating backup of master branch..."
+    - git config --global user.email "ci@gitlab.com"
+    - git config --global user.name "GitLab CI"
+    - |
+      # Create backup branch with timestamp
+      BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
+      git checkout -b "$BACKUP_BRANCH"
+      git push origin "$BACKUP_BRANCH"
+      echo "Backup created: $BACKUP_BRANCH"
+    - |
+      # Also create a tag for easy reference
+      BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
+      git tag "$BACKUP_TAG"
+      git push origin "$BACKUP_TAG"
+      echo "Backup tag created: $BACKUP_TAG"
+  only:
+    - master
+  when: always
 
 provision:
   stage: provision
