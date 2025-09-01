@@ -19,7 +19,7 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - DJANGO_ALLOWED_HOSTS=fauxdan.io,localhost,127.0.0.1
+      - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
       interval: 30s

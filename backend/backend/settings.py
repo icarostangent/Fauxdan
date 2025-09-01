@@ -185,9 +185,11 @@ if DEBUG:
 else:
     CORS_ALLOWED_ORIGINS = [
         'http://fauxdan.io',
+        'https://admin.fauxdan.io',
     ]
     CSRF_TRUSTED_ORIGINS = [
         'https://fauxdan.io',
+        'https://admin.fauxdan.io',
     ]
 
 REST_FRAMEWORK = {

@@ -12,13 +12,85 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - DJANGO_ALLOWED_HOSTS=fauxdan.io,localhost,127.0.0.1
+      - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
       interval: 30s
       timeout: 30s
       retries: 5
       start_period: 120s  # This is key - gives Django 2 minutes to start
+
+  # Backend-admin service for admin-specific functionality
+  backend-admin:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+    environment:
+      - DJANGO_DEBUG=False
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
+      - DJANGO_ADMIN_PORT=8001
+      - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+
+  # Scanner service for background processing
+  scanner:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    restart: unless-stopped
+    environment:
+      - DJANGO_DEBUG=False
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    cap_add:
+      - NET_ADMIN
+
+  # Database service
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DJANGO_DB_USER} -d ${DJANGO_DB_NAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: redis:alpine
@@ -30,8 +102,8 @@ services:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "enp1s0:80:80"
+      - "enp1s0:443:443"
     environment:
       - VUE_APP_API_URL=${VUE_APP_API_URL}
     volumes:
@@ -42,12 +114,98 @@ services:
       backend:
         condition: service_healthy
 
+  # Caddy-admin service for admin panel routing
+  caddy-admin:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    restart: unless-stopped
+    ports:
+      - "wg0:8443:8443"
+    volumes:
+      - ./caddy/Caddyfile.admin:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_logs:/var/log/caddy
+      - staticfiles:/staticfiles
+    depends_on:
+      backend-admin:
+        condition: service_healthy
+
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
     restart: unless-stopped
-  
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.external-url=https://localhost:8443/prometheus'
+
+  # Grafana for dashboards and visualization
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SERVER_ROOT_URL=https://localhost:8443/grafana/
+      - GF_SERVER_SERVE_FROM_SUBPATH=true
+    depends_on:
+      - prometheus
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  # Redis Exporter for Redis metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+
+  # Postgres Exporter for database metrics
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
+    depends_on:
+      - db
+
 volumes:
   staticfiles:
   redis_data:
   caddy_data:
   caddy_logs:
+  db_data:
+  prometheus_data:
+  grafana_data:
