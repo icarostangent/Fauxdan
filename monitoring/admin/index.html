@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fauxdan Admin Panel</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .admin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .admin-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .admin-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .admin-card h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.5em;
+            color: #fff;
+        }
+        .admin-card p {
+            margin: 0 0 20px 0;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+        .admin-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .admin-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #ee5a24, #ff6b6b);
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-up {
+            background-color: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        .status-down {
+            background-color: #ff4757;
+            box-shadow: 0 0 10px #ff4757;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            opacity: 0.7;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Fauxdan Admin Panel</h1>
+            <p>Centralized administration and monitoring interface</p>
+        </div>
+
+        <div class="admin-grid">
+            <div class="admin-card">
+                <h3>📊 Django Admin</h3>
+                <p>Manage your application data, users, and system configuration through Django's built-in admin interface.</p>
+                <a href="/admin" class="admin-btn">Access Django Admin</a>
+            </div>
+
+            <div class="admin-card">
+                <h3>📈 Grafana Dashboards</h3>
+                <p>Monitor system performance, database metrics, and application analytics with beautiful visualizations.</p>
+                <a href="/grafana" class="admin-btn">Open Grafana</a>
+            </div>
+
+            <div class="admin-card">
+                <h3>🔍 Prometheus</h3>
+                <p>View raw metrics data, configure alerts, and explore your monitoring data in detail.</p>
+                <a href="/prometheus" class="admin-btn">Access Prometheus</a>
+            </div>
+
+            <div class="admin-card">
+                <h3>📋 System Status</h3>
+                <p>Check the health and status of all your services and infrastructure components.</p>
+                <div id="system-status">
+                    <span class="status-indicator status-up"></span>
+                    <span>All systems operational</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2025 Fauxdan Admin Panel | Development Environment</p>
+        </div>
+    </div>
+
+    <script>
+        // Simple status checking
+        async function checkServiceStatus() {
+            const services = [
+                { name: 'Django Admin', url: '/admin' },
+                { name: 'Grafana', url: '/grafana' },
+                { name: 'Prometheus', url: '/prometheus' }
+            ];
+
+            for (const service of services) {
+                try {
+                    const response = await fetch(service.url, { method: 'HEAD' });
+                    console.log(`${service.name}: ${response.ok ? 'UP' : 'DOWN'}`);
+                } catch (error) {
+                    console.log(`${service.name}: DOWN - ${error.message}`);
+                }
+            }
+        }
+
+        // Check status on page load
+        checkServiceStatus();
+    </script>
+</body>
+</html>

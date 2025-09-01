@@ -11,4 +11,6 @@ datasources:
       timeInterval: "15s"
       queryTimeout: "60s"
       httpMethod: "POST"
+      # Configure for subpath deployment
+      path: "/prometheus"
     secureJsonData: {}

@@ -178,6 +178,7 @@ if DEBUG:
     CSRF_TRUSTED_ORIGINS = [
         'https://dev2.icarostangent.lab',
         'https://localhost',
+        'https://localhost:8443',
         'http://localhost',
         'http://127.0.0.1',
     ]
