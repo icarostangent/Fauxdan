@@ -1,5 +1,7 @@
 # Production admin panel configuration
 fauxdan-admin.icarostangent.lab {
+    # Enable TLS with self-signed certificate
+    tls internal
     # Handle Django admin requests
     handle /admin {
         reverse_proxy backend-admin:8000
