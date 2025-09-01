@@ -271,6 +271,14 @@ def collect_all_metrics():
     update_db_metrics()
     update_cache_metrics()
     update_redis_metrics()
+    
+    # Import and call custom metrics collection
+    try:
+        from .signals import collect_custom_metrics
+        collect_custom_metrics()
+    except ImportError:
+        # Signals not available yet
+        pass
 
 # Initialize metrics on module import
 init_app_info()

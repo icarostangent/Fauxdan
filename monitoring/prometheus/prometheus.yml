@@ -36,7 +36,7 @@ scrape_configs:
   # Django Backend
   - job_name: 'django-backend'
     static_configs:
-      - targets: ['172.19.0.7:8000']
+      - targets: ['backend:8000']
     metrics_path: '/metrics/'
     scrape_interval: 30s
 

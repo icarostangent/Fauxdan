@@ -171,21 +171,42 @@ def collect_custom_metrics():
         try:
             from analytics.models import Visitor, PageView, Session, Event
             
-            # Visitor count by source
-            visitor_counts = Visitor.objects.values('source').annotate(
+            # Visitor count by device type (using session data)
+            device_counts = Session.objects.values('device_type').annotate(
                 count=Count('id')
             )
-            for item in visitor_counts:
-                source = item['source'] or 'unknown'
-                analytics_visitors_total.labels(source=source).inc(item['count'])
+            for item in device_counts:
+                device_type = item['device_type'] or 'unknown'
+                analytics_visitors_total.labels(source=device_type).inc(item['count'])
             
-            # Page view counts
-            pageview_counts = PageView.objects.values('page').annotate(
+            # Page view counts by URL
+            pageview_counts = PageView.objects.values('url').annotate(
                 count=Count('id')
             )
             for item in pageview_counts:
-                page = item['page'] or 'unknown'
+                url = item['url'] or 'unknown'
+                # Extract page name from URL
+                if url:
+                    page = url.split('/')[-1] if url.split('/')[-1] else 'root'
+                else:
+                    page = 'unknown'
                 analytics_pageviews_total.labels(page=page, source='database').inc(item['count'])
+            
+            # Session counts by device type
+            session_counts = Session.objects.values('device_type').annotate(
+                count=Count('id')
+            )
+            for item in session_counts:
+                device_type = item['device_type'] or 'unknown'
+                analytics_sessions_total.labels(source=device_type).inc(item['count'])
+            
+            # Event counts by category and action
+            event_counts = Event.objects.values('event_type').annotate(
+                count=Count('id')
+            )
+            for item in event_counts:
+                event_type = item['event_type'] or 'unknown'
+                analytics_events_total.labels(category='engagement', action=event_type).inc(item['count'])
                 
         except ImportError:
             # Analytics models not available
