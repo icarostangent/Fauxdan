@@ -12,7 +12,7 @@ backup:master:
   script:
     - echo "Creating backup of master branch..."
     - |
-      # Create backup using GitLab API (requires CI_JOB_TOKEN)
+      # Create backup using GitLab API
       BACKUP_TAG="backup-$(date +%Y%m%d-%H%M%S)"
       COMMIT_SHA=$(git rev-parse HEAD)
       
@@ -25,10 +25,11 @@ backup:master:
         --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"Automated backup before deployment\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
       
-      echo "Backup tag created successfully: $BACKUP_TAG"
-    - |
-      # Also create a backup branch using GitLab API
+      echo "Backup tag created: $BACKUP_TAG"
+      
+      # Create backup branch
       BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
+      echo "Creating backup branch: $BACKUP_BRANCH"
       
       curl --request POST \
         --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
@@ -36,7 +37,7 @@ backup:master:
         --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches"
       
-      echo "Backup branch created successfully: $BACKUP_BRANCH"
+      echo "Backup branch created: $BACKUP_BRANCH"
   only:
     - master
   when: always
