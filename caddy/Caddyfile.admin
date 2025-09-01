@@ -1,5 +1,5 @@
 # Production admin panel configuration
-admin.fauxdan.io {
+fauxdan-admin.icarostangent.lab {
     # Handle Django admin requests
     handle /admin {
         reverse_proxy backend-admin:8000
