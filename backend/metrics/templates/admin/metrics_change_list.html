@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+  <style>
+    .metrics-links {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .metrics-links h2 {
+      margin-top: 0;
+      color: #495057;
+    }
+    .metrics-link {
+      display: inline-block;
+      background: #007bff;
+      color: white;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: background-color 0.3s;
+    }
+    .metrics-link:hover {
+      background: #0056b3;
+      color: white;
+      text-decoration: none;
+    }
+    .metrics-description {
+      color: #6c757d;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="metrics-links">
+    <h2>📊 Django Metrics & Monitoring</h2>
+    <p>Monitor your application performance and health with these metrics endpoints:</p>
+    
+    {% for link in metrics_links %}
+      <div style="margin-bottom: 15px;">
+        <a href="{{ link.url }}" class="metrics-link">{{ link.name }}</a>
+        <div class="metrics-description">{{ link.description }}</div>
+      </div>
+    {% endfor %}
+    
+    <div style="margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 4px;">
+      <h3>🔗 Quick Access URLs:</h3>
+      <ul>
+        <li><strong>Prometheus Metrics:</strong> <code>/metrics/</code></li>
+        <li><strong>Health Check:</strong> <code>/metrics/health/</code></li>
+        <li><strong>Metrics Status:</strong> <code>/metrics/status/</code></li>
+        <li><strong>Increment Metrics:</strong> <code>/metrics/increment/</code> (POST)</li>
+      </ul>
+    </div>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

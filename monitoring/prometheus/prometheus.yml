@@ -1,0 +1,70 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'development'
+    project: 'fauxdan'
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: '/metrics'
+
+  # Redis Exporter
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: '/metrics'
+
+  # Postgres Exporter
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: '/metrics'
+
+  # Django Backend
+  - job_name: 'django-backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics/'
+    scrape_interval: 30s
+
+  # Frontend (will be added when we implement metrics endpoint)
+  # - job_name: 'vue-frontend'
+  #   static_configs:
+  #     - targets: ['frontend:3000']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 30s
+
+  # Scanner Service (will be added when we implement metrics endpoint)
+  # - job_name: 'scanner-service'
+  #   static_configs:
+  #     - targets: ['scanner:8000']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 30s
+
+  # Caddy (will be added when we implement metrics endpoint)
+  # - job_name: 'caddy'
+  #   static_configs:
+  #     - targets: ['caddy:80']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Recording rules for common queries

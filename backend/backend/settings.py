@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
     'internet',
     'analytics',
+    'metrics',
 ]
 
 MIDDLEWARE = [
@@ -64,6 +65,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'analytics.middleware.AnalyticsMiddleware',
+    'metrics.metrics.MetricsMiddleware',
+    'metrics.metrics.DatabaseMetricsMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -175,15 +178,18 @@ if DEBUG:
     CSRF_TRUSTED_ORIGINS = [
         'https://dev2.icarostangent.lab',
         'https://localhost',
+        'https://localhost:8443',
         'http://localhost',
         'http://127.0.0.1',
     ]
 else:
     CORS_ALLOWED_ORIGINS = [
         'http://fauxdan.io',
+        'https://admin.fauxdan.io',
     ]
     CSRF_TRUSTED_ORIGINS = [
         'https://fauxdan.io',
+        'https://admin.fauxdan.io',
     ]
 
 REST_FRAMEWORK = {

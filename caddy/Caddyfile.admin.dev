@@ -1,0 +1,88 @@
+{
+    # Development configuration for admin panel
+    debug
+    admin off
+    local_certs
+    # Allow self-signed certs for development
+    skip_install_trust
+}
+
+
+
+# HTTPS server for admin panel (port 8443)
+localhost:8443 {
+    # Force self-signed certificate
+    tls internal
+
+    # Route Django admin to backend-admin service
+    handle /admin {
+        reverse_proxy backend-admin:8000
+    }
+    
+    handle /admin/* {
+        reverse_proxy backend-admin:8000
+    }
+
+    # Route Grafana to the grafana service
+    handle /grafana {
+        reverse_proxy grafana:3000
+    }
+    
+    handle /grafana/* {
+        reverse_proxy grafana:3000
+    }
+
+    # Route Prometheus to the prometheus service
+    handle /prometheus {
+        uri strip_prefix /prometheus
+        reverse_proxy prometheus:9090
+    }
+    
+    handle /prometheus/* {
+        uri strip_prefix /prometheus
+        reverse_proxy prometheus:9090
+    }
+
+    # Handle Prometheus redirects (like /query)
+    handle /query {
+        reverse_proxy prometheus:9090
+    }
+    
+    handle /query/* {
+        reverse_proxy prometheus:9090
+    }
+
+    # Route metrics endpoints to backend-admin
+    handle /metrics {
+        reverse_proxy backend-admin:8000
+    }
+    
+    handle /metrics/* {
+        reverse_proxy backend-admin:8000
+    }
+
+    # Handle static files for Django admin
+    handle_path /static/* {
+        root * /staticfiles
+        file_server
+    }
+
+    # Serve admin index page
+    handle / {
+        root * /admin
+        file_server
+        try_files {path} /index.html
+    }
+
+    # Default route to Django admin for other requests
+    handle {
+        reverse_proxy backend-admin:8000
+    }
+
+    # Detailed development logging
+    log {
+        output stdout
+        format console
+        level DEBUG
+    }
+}

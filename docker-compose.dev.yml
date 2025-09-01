@@ -34,6 +34,31 @@ services:
       - redis
     command: ["/bin/bash", "/app/init.sh"]
     restart: unless-stopped
+
+  # New backend-admin service for admin-specific functionality
+  backend-admin:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.backend
+    expose:
+      - "8001"
+    volumes:
+      - ./backend:/app 
+      - ./static:/static
+    environment:
+      - DJANGO_DEBUG=True
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
+      - DJANGO_ADMIN_PORT=8001
+    depends_on:
+      - db
+      - redis
+    command: ["/bin/bash", "/app/init.sh"]
+    restart: unless-stopped
       
   scanner:
     build:
@@ -89,12 +114,28 @@ services:
       context: ./caddy
       dockerfile: Dockerfile.dev
     ports:
-      - "80:80"
-      - "443:443"
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile
       - ./static:/static
       - ./backend/staticfiles:/staticfiles
+      - caddy_certs:/etc/caddy/certs
+      - caddy_data:/data
+    restart: unless-stopped
+
+  # New caddy-admin service for admin panel routing
+  caddy-admin:
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./caddy/Caddyfile.admin.dev:/etc/caddy/Caddyfile
+      - ./static:/static
+      - ./backend/staticfiles:/staticfiles
+      - ./monitoring/admin:/admin
       - caddy_certs:/etc/caddy/certs
       - caddy_data:/data
     restart: unless-stopped
@@ -107,8 +148,88 @@ services:
       - "9090"
     restart: unless-stopped
 
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    expose:
+      - "9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.external-url=https://localhost:8443/prometheus'
+    restart: unless-stopped
+
+  # Grafana for dashboards and visualization (updated for admin routing)
+  grafana:
+    image: grafana/grafana:latest
+    expose:
+      - "3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SERVER_ROOT_URL=https://localhost:8443/grafana/
+      - GF_SERVER_SERVE_FROM_SUBPATH=true
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    expose:
+      - "9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+
+  # Redis Exporter for Redis metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    expose:
+      - "9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  # Postgres Exporter for database metrics
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    expose:
+      - "9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
+    restart: unless-stopped
+    depends_on:
+      - db
+
 volumes:
   db_data:
   redis_data:
   caddy_data:
   caddy_certs:
+  prometheus_data:
+  grafana_data:
