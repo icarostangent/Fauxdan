@@ -34,8 +34,6 @@ services:
       - redis
     command: ["/bin/bash", "/app/init.sh"]
     restart: unless-stopped
-    networks:
-      - monitoring
       
   scanner:
     build:
@@ -56,8 +54,6 @@ services:
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
-    networks:
-      - monitoring
 
   db:
     build:
@@ -77,8 +73,6 @@ services:
       # - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/init_db.sh:/docker-entrypoint-initdb.d/init_db.sh
     restart: unless-stopped
-    networks:
-      - monitoring
 
   redis:
     build:
@@ -89,8 +83,6 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
-    networks:
-      - monitoring
 
   caddy:  
     build:
@@ -133,8 +125,6 @@ services:
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
     restart: unless-stopped
-    networks:
-      - monitoring
 
   # Grafana for dashboards and visualization
   grafana:
@@ -151,8 +141,6 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     restart: unless-stopped
-    networks:
-      - monitoring
     depends_on:
       - prometheus
 
@@ -170,8 +158,6 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     restart: unless-stopped
-    networks:
-      - monitoring
 
   # Redis Exporter for Redis metrics
   redis-exporter:
@@ -181,8 +167,6 @@ services:
     environment:
       - REDIS_ADDR=redis://redis:6379
     restart: unless-stopped
-    networks:
-      - monitoring
     depends_on:
       - redis
 
@@ -194,14 +178,8 @@ services:
     environment:
       - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
     restart: unless-stopped
-    networks:
-      - monitoring
     depends_on:
       - db
-
-networks:
-  monitoring:
-    driver: bridge
 
 volumes:
   db_data:
