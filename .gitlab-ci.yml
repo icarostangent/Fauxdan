@@ -34,24 +34,38 @@ backup:master:
       echo "Creating backup tag: $BACKUP_TAG for commit: $COMMIT_SHA"
       
       # Create tag using GitLab API
-      curl --request POST \
-        --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+      echo "Creating backup tag: $BACKUP_TAG"
+      TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
+        --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"$BACKUP_MESSAGE\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags")
       
-      echo "Backup tag created: $BACKUP_TAG"
+      echo "Tag API response: $TAG_RESPONSE"
+      
+      if echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+        echo "✅ Backup tag created successfully: $BACKUP_TAG"
+      else
+        echo "❌ Failed to create backup tag. Response: $TAG_RESPONSE"
+        echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+      fi
       
       # Create backup branch
       echo "Creating backup branch: $BACKUP_BRANCH"
-      
-      curl --request POST \
-        --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+      BRANCH_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
+        --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches"
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches")
       
-      echo "Backup branch created: $BACKUP_BRANCH"
+      echo "Branch API response: $BRANCH_RESPONSE"
+      
+      if echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+        echo "✅ Backup branch created successfully: $BACKUP_BRANCH"
+      else
+        echo "❌ Failed to create backup branch. Response: $BRANCH_RESPONSE"
+        echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+      fi
   only:
     - master
   when: always
