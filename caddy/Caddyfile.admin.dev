@@ -43,7 +43,11 @@ localhost:8443 {
         reverse_proxy prometheus:9090
     }
 
-    # Handle Prometheus redirects (like /query)
+    # Handle Prometheus API endpoints (must come before other routes)
+    handle /api/v1/* {
+        reverse_proxy prometheus:9090
+    }
+    
     handle /query {
         reverse_proxy prometheus:9090
     }
