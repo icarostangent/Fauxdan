@@ -165,7 +165,7 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-      - '--web.external-url=https://localhost:8443/prometheus'
+
     restart: unless-stopped
 
   # Grafana for dashboards and visualization (updated for admin routing)
