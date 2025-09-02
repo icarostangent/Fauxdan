@@ -190,6 +190,7 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         'https://fauxdan.io',
         'https://admin.fauxdan.io',
+        'https://fauxdan-admin.icarostangent.lab:8443',
     ]
 
 REST_FRAMEWORK = {
