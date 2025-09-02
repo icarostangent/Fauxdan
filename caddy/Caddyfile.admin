@@ -1,5 +1,5 @@
 # Production admin panel configuration
-fauxdan-admin.icarostangent.lab {
+fauxdan-admin.icarostangent.lab:8443 {
     # Enable TLS with self-signed certificate
     tls internal
     # Handle Django admin requests
