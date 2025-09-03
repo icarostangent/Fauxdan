@@ -43,6 +43,37 @@ localhost:8443 {
         reverse_proxy prometheus:9090
     }
 
+    # Route Elasticsearch to the elasticsearch service
+    handle /elasticsearch {
+        uri strip_prefix /elasticsearch
+        reverse_proxy elasticsearch:9200
+    }
+    
+    handle /elasticsearch/* {
+        uri strip_prefix /elasticsearch
+        reverse_proxy elasticsearch:9200
+    }
+
+    # Route Kibana to the kibana service
+    handle /kibana {
+        reverse_proxy kibana:5601
+    }
+    
+    handle /kibana/* {
+        reverse_proxy kibana:5601
+    }
+
+    # Route Logstash monitoring to the logstash service
+    handle /logstash {
+        uri strip_prefix /logstash
+        reverse_proxy logstash:9600
+    }
+    
+    handle /logstash/* {
+        uri strip_prefix /logstash
+        reverse_proxy logstash:9600
+    }
+
     # Handle Prometheus API endpoints (must come before other routes)
     handle /api/v1/* {
         reverse_proxy prometheus:9090

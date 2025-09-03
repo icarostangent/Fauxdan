@@ -21,6 +21,7 @@ services:
     volumes:
       - ./backend:/app 
       - ./static:/static
+      - ./logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -45,6 +46,7 @@ services:
     volumes:
       - ./backend:/app 
       - ./static:/static
+      - ./logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -66,6 +68,7 @@ services:
       dockerfile: Dockerfile.dev.scanner
     volumes:
       - ./backend:/app 
+      - ./logs:/var/log/app
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=True
@@ -226,6 +229,105 @@ services:
     depends_on:
       - db
 
+  # Elasticsearch for log storage and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: fauxdan-elasticsearch
+    expose:
+      - "9200"
+      - "9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    volumes:
+      - ./monitoring/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - elasticsearch_logs:/usr/share/elasticsearch/logs
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Log forwarder to send Django logs to Logstash
+  log-forwarder:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile.log-forwarder
+    container_name: fauxdan-log-forwarder
+    volumes:
+      - ./logs:/var/log/app
+    environment:
+      - LOG_FILE=/var/log/app/django.log
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
+    depends_on:
+      logstash:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Logstash for log processing and forwarding
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: fauxdan-logstash
+    expose:
+      - "5000"
+      - "5044"
+      - "514"
+    volumes:
+      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./monitoring/logstash/templates:/usr/share/logstash/templates:ro
+      - ./logs:/var/log/app
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - logstash_data:/usr/share/logstash/data
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana for log visualization and analysis
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: fauxdan-kibana
+    expose:
+      - "5601"
+    volumes:
+      - ./monitoring/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - kibana_data:/usr/share/kibana/data
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=""
+      - ELASTICSEARCH_PASSWORD=""
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      logstash:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   db_data:
   redis_data:
@@ -233,3 +335,7 @@ volumes:
   caddy_certs:
   prometheus_data:
   grafana_data:
+  elasticsearch_data:
+  elasticsearch_logs:
+  logstash_data:
+  kibana_data:
