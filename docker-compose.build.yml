@@ -5,11 +5,23 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod.backend
       
+  backend-admin:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod.backend
+      
   scanner:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.scanner
+
+  redis:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
+    build:
+      context: ./redis
+      dockerfile: Dockerfile
 
   caddy: 
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
@@ -19,8 +31,44 @@ services:
       args:
         VUE_APP_API_URL: https://fauxdan.io
 
-  tor:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
+  caddy-admin:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
     build:
-      context: ./tor
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./caddy/Dockerfile
+      args:
+        VUE_APP_API_URL: https://fauxdan.io
+
+  tor:
+    image: torproject/tor
+  # Monitoring services (using official images - no custom builds needed)
+  prometheus:
+    image: prom/prometheus:latest
+
+  grafana:
+    image: grafana/grafana:latest
+
+  node-exporter:
+    image: prom/node-exporter:latest
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+
+  # ELK Stack (using official images - no custom builds needed)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+
+  log-forwarder:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile.log-forwarder
