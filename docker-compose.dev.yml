@@ -144,7 +144,7 @@ services:
     restart: unless-stopped
 
   tor:
-    image: torproject/tor
+    image: thetorproject/tor
     ports:
       - "9050:9050"
       - "9090:9090"
