@@ -6,6 +6,7 @@ services:
       - "8000"
     volumes:
       - staticfiles:/app/staticfiles
+      - logs:/var/log/app
     environment:
       - DJANGO_DEBUG=False
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -19,11 +20,11 @@ services:
       redis:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
       timeout: 30s
       retries: 5
-      start_period: 120s  # This is key - gives Django 2 minutes to start
+      start_period: 120s
 
   # Backend-admin service for admin-specific functionality
   backend-admin:
@@ -33,6 +34,7 @@ services:
       - "8000"
     volumes:
       - staticfiles:/app/staticfiles
+      - logs:/var/log/app
     environment:
       - DJANGO_DEBUG=False
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -42,11 +44,12 @@ services:
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
       - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
+      - DJANGO_ADMIN_PORT=8000
     depends_on:
       redis:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
       timeout: 30s
       retries: 5
@@ -54,8 +57,10 @@ services:
 
   # Scanner service for background processing
   scanner:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
     restart: unless-stopped
+    volumes:
+      - logs:/var/log/app
     environment:
       - DJANGO_DEBUG=False
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -71,8 +76,10 @@ services:
       - NET_ADMIN
 
   redis:
-    image: redis:alpine
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
     restart: unless-stopped
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
 
@@ -85,8 +92,10 @@ services:
     environment:
       - VUE_APP_API_URL=${VUE_APP_API_URL}
     volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_logs:/var/log/caddy
+      - caddy_certs:/etc/caddy/certs
       - staticfiles:/staticfiles
     depends_on:
       backend:
@@ -103,19 +112,29 @@ services:
       - ./monitoring/admin:/admin
       - caddy_data:/data
       - caddy_logs:/var/log/caddy
+      - caddy_certs:/etc/caddy/certs
       - staticfiles:/staticfiles
     depends_on:
       backend-admin:
         condition: service_healthy
+      grafana:
+        condition: service_started
+      prometheus:
+        condition: service_started
 
   tor:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
     restart: unless-stopped
+    expose:
+      - "9050"
+      - "9090"
 
   # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
+    expose:
+      - "9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/prometheus/rules:/etc/prometheus/rules
@@ -128,12 +147,14 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-      - '--web.external-url=https://localhost:8443/prometheus'
+      - '--web.external-url=https://fauxdan-admin.icarostangent.lab:8443/prometheus'
 
   # Grafana for dashboards and visualization
   grafana:
     image: grafana/grafana:latest
     restart: unless-stopped
+    expose:
+      - "3000"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
@@ -144,7 +165,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
-      - GF_SERVER_ROOT_URL=https://localhost:8443/grafana/
+      - GF_SERVER_ROOT_URL=https://fauxdan-admin.icarostangent.lab:8443/grafana/
       - GF_SERVER_SERVE_FROM_SUBPATH=true
     depends_on:
       - prometheus
@@ -153,6 +174,8 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     restart: unless-stopped
+    expose:
+      - "9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -166,6 +189,8 @@ services:
   redis-exporter:
     image: oliver006/redis_exporter:latest
     restart: unless-stopped
+    expose:
+      - "9121"
     environment:
       - REDIS_ADDR=redis://redis:6379
     depends_on:
@@ -175,14 +200,115 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     restart: unless-stopped
+    expose:
+      - "9187"
     environment:
       - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
+
+  # Elasticsearch for log storage and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    restart: unless-stopped
+    expose:
+      - "9200"
+      - "9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    volumes:
+      - ./monitoring/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - elasticsearch_logs:/usr/share/elasticsearch/logs
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Log forwarder to send Django logs to Logstash
+  log-forwarder:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder
+    restart: unless-stopped
+    volumes:
+      - logs:/var/log/app
+    environment:
+      - LOG_FILE=/var/log/app/django.log
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
+    depends_on:
+      logstash:
+        condition: service_healthy
+
+  # Logstash for log processing and forwarding
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    restart: unless-stopped
+    expose:
+      - "5000"
+      - "5044"
+      - "514"
+      - "9600"
+    volumes:
+      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./monitoring/logstash/templates:/usr/share/logstash/templates:ro
+      - logs:/var/log/app
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - logstash_data:/usr/share/logstash/data
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana for log visualization and analysis
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    restart: unless-stopped
+    expose:
+      - "5601"
+    volumes:
+      - ./monitoring/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - kibana_data:/usr/share/kibana/data
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=""
+      - ELASTICSEARCH_PASSWORD=""
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      logstash:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   staticfiles:
   redis_data:
   caddy_data:
   caddy_logs:
-  db_data:
+  caddy_certs:
+  logs:
   prometheus_data:
   grafana_data:
+  elasticsearch_data:
+  elasticsearch_logs:
+  logstash_data:
+  kibana_data:
