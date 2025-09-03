@@ -123,7 +123,7 @@ services:
         condition: service_started
 
   tor:
-    image: torproject/tor
+    image: thetorproject/tor
     restart: unless-stopped
     expose:
       - "9050"

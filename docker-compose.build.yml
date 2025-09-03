@@ -40,7 +40,7 @@ services:
         VUE_APP_API_URL: https://fauxdan.io
 
   tor:
-    image: torproject/tor
+    image: thetorproject/tor
   # Monitoring services (using official images - no custom builds needed)
   prometheus:
     image: prom/prometheus:latest
