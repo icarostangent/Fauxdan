@@ -86,7 +86,7 @@ build:production:
   before_script:
     - echo "$GITLAB_REGISTRY_PASSWORD" | docker login gitlab.icarostangent.lab:5050 -u $GITLAB_REGISTRY_USERNAME --password-stdin
   script:
-    - docker compose -f docker-compose.build.yml pull
+    # - docker compose -f docker-compose.build.yml pull
     - docker compose -f docker-compose.build.yml build
     - docker compose -f docker-compose.build.yml push
     - docker system prune -f
