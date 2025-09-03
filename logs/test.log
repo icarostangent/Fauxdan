@@ -1,0 +1,2 @@
+{"timestamp":"2025-09-03T01:17:00Z","level":"INFO","message":"Test log entry","service":"test"}
+{"timestamp":"2025-09-03T01:20:00Z","level":"INFO","message":"Another test log entry","service":"test"}

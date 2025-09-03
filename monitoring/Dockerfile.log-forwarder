@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+# Install required packages
+RUN pip install --no-cache-dir --upgrade pip
+
+# Copy the log forwarder script
+COPY log-forwarder.py /app/log-forwarder.py
+
+# Make the script executable
+RUN chmod +x /app/log-forwarder.py
+
+# Set working directory
+WORKDIR /app
+
+# Run the log forwarder
+CMD ["python3", "log-forwarder.py"]

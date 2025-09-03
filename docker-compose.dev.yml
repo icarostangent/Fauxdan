@@ -3,8 +3,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     volumes:
       - ./frontend:/app 
       - ./frontend/node_modules:/app/node_modules
@@ -16,11 +16,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev.backend
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app 
       - ./static:/static
+      - ./logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -40,11 +41,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev.backend
-    expose:
-      - "8001"
+    ports:
+      - "8001:8001"
     volumes:
       - ./backend:/app 
       - ./static:/static
+      - ./logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -66,6 +68,7 @@ services:
       dockerfile: Dockerfile.dev.scanner
     volumes:
       - ./backend:/app 
+      - ./logs:/var/log/app
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=True
@@ -84,8 +87,8 @@ services:
     build:
       context: ./db
       dockerfile: Dockerfile
-    expose:
-      - "5432"
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -103,8 +106,8 @@ services:
     build:
       context: ./redis
       dockerfile: Dockerfile
-    expose:
-      - "6379"
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -143,16 +146,16 @@ services:
   tor:
     build:
       context: ./tor
-    expose:
-      - "9050"
-      - "9090"
+    ports:
+      - "9050:9050"
+      - "9090:9090"
     restart: unless-stopped
 
   # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
-    expose:
-      - "9090"
+    ports:
+      - "9091:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/prometheus/rules:/etc/prometheus/rules
@@ -171,8 +174,8 @@ services:
   # Grafana for dashboards and visualization (updated for admin routing)
   grafana:
     image: grafana/grafana:latest
-    expose:
-      - "3000"
+    ports:
+      - "3001:3000"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
@@ -192,8 +195,8 @@ services:
   # Node Exporter for system metrics
   node-exporter:
     image: prom/node-exporter:latest
-    expose:
-      - "9100"
+    ports:
+      - "9100:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -207,8 +210,8 @@ services:
   # Redis Exporter for Redis metrics
   redis-exporter:
     image: oliver006/redis_exporter:latest
-    expose:
-      - "9121"
+    ports:
+      - "9121:9121"
     environment:
       - REDIS_ADDR=redis://redis:6379
     restart: unless-stopped
@@ -218,13 +221,112 @@ services:
   # Postgres Exporter for database metrics
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
-    expose:
-      - "9187"
+    ports:
+      - "9187:9187"
     environment:
       - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
     restart: unless-stopped
     depends_on:
       - db
+
+  # Elasticsearch for log storage and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: fauxdan-elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    volumes:
+      - ./monitoring/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - elasticsearch_logs:/usr/share/elasticsearch/logs
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Log forwarder to send Django logs to Logstash
+  log-forwarder:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile.log-forwarder
+    container_name: fauxdan-log-forwarder
+    volumes:
+      - ./logs:/var/log/app
+    environment:
+      - LOG_FILE=/var/log/app/django.log
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
+    depends_on:
+      logstash:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Logstash for log processing and forwarding
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: fauxdan-logstash
+    ports:
+      - "5000:5000"
+      - "5044:5044"
+      - "514:514"
+    volumes:
+      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./monitoring/logstash/templates:/usr/share/logstash/templates:ro
+      - ./logs:/var/log/app
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - logstash_data:/usr/share/logstash/data
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana for log visualization and analysis
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: fauxdan-kibana
+    ports:
+      - "5601:5601"
+    volumes:
+      - ./monitoring/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - kibana_data:/usr/share/kibana/data
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=""
+      - ELASTICSEARCH_PASSWORD=""
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      logstash:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   db_data:
@@ -233,3 +335,7 @@ volumes:
   caddy_certs:
   prometheus_data:
   grafana_data:
+  elasticsearch_data:
+  elasticsearch_logs:
+  logstash_data:
+  kibana_data:
