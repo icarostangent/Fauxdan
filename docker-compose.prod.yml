@@ -123,7 +123,7 @@ services:
         condition: service_started
 
   tor:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/tor
+    image: torproject/tor
     restart: unless-stopped
     expose:
       - "9050"
@@ -203,7 +203,7 @@ services:
     expose:
       - "9187"
     environment:
-      - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@db:5432/${DJANGO_DB_NAME}?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@${DJANGO_DB_HOST}:${DJANGO_DB_PORT}/${DJANGO_DB_NAME}?sslmode=disable
 
   # Elasticsearch for log storage and search
   elasticsearch:
