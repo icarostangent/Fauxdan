@@ -265,7 +265,7 @@ services:
       dockerfile: Dockerfile.log-forwarder
     container_name: fauxdan-log-forwarder
     volumes:
-      - ./logs:/var/log/app
+      - logs:/var/log/app
     environment:
       - LOG_FILE=/var/log/app/django.log
       - LOGSTASH_HOST=logstash
@@ -286,7 +286,7 @@ services:
     volumes:
       - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - ./monitoring/logstash/templates:/usr/share/logstash/templates:ro
-      - ./logs:/var/log/app
+      - logs:/var/log/app
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - logstash_data:/usr/share/logstash/data
@@ -338,3 +338,4 @@ volumes:
   elasticsearch_logs:
   logstash_data:
   kibana_data:
+  logs:
