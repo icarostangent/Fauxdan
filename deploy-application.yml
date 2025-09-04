@@ -122,6 +122,7 @@
       debug:
         msg: "{{ docker_login_result.stdout_lines }}"
 
+    # commenting this drastically improves pull time but gradually consumes disk space
     # - name: Prune Docker system
     #   shell: |
     #     docker system prune -a -f
@@ -168,6 +169,20 @@
         - 80
         - 443
 
+    - name: Wait for Database to be healthy
+      uri:
+        url: "http://localhost:5432"
+        method: GET
+        timeout: 10
+      retries: 30
+      delay: 10
+      register: db_health
+      failed_when: false
+
+    - name: Show Database health status
+      debug:
+        msg: "Database health: {{ db_health.status }}"
+
     - name: Wait for Elasticsearch to be healthy
       uri:
         url: "http://localhost:9200/_cluster/health"
@@ -182,6 +197,19 @@
     - name: Show Elasticsearch health status
       debug:
         msg: "Elasticsearch health: {{ elasticsearch_health.status }} - {{ elasticsearch_health.json.status if elasticsearch_health.json is defined else 'No response' }}"
+
+    - name: Check Database logs
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f docker-compose.staging.yml --env-file .env.staging logs --tail=50 db
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: db_logs
+      failed_when: false
+
+    - name: Show Database logs
+      debug:
+        msg: "{{ db_logs.stdout_lines }}"
 
     - name: Check Elasticsearch logs
       shell: |
@@ -262,6 +290,7 @@
           Workspace: {{ workspace_dir }}
           Latest Commit: {{ git_status_output.stdout_lines[1] if git_status_output.stdout_lines | length > 1 else 'Unknown' }}
           Health Check: {{ health_check_result.status }}
+          Database Health: {{ db_health.status }}
           Elasticsearch Health: {{ elasticsearch_health.json.status if elasticsearch_health.json is defined else 'Unknown' }}
           Failed Containers: {{ failed_containers.stdout_lines | length - 1 if failed_containers.stdout_lines | length > 1 else 0 }}
           ========================================
