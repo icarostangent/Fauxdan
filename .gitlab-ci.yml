@@ -12,6 +12,20 @@ backup:master:
   script:
     - echo "Creating backup of master branch..."
     - |
+      # Validate required variables
+      if [ -z "$GITLAB_API_TOKEN" ]; then
+        echo "❌ ERROR: GITLAB_API_TOKEN is not set"
+        echo "Please set the GITLAB_API_TOKEN variable in your GitLab project settings"
+        exit 1
+      fi
+      
+      if [ -z "$CI_API_V4_URL" ] || [ -z "$CI_PROJECT_ID" ]; then
+        echo "❌ ERROR: GitLab CI variables are not set"
+        echo "CI_API_V4_URL: $CI_API_V4_URL"
+        echo "CI_PROJECT_ID: $CI_PROJECT_ID"
+        exit 1
+      fi
+      
       # Create backup using GitLab API with source branch info
       COMMIT_SHA=$(git rev-parse HEAD)
       
@@ -48,6 +62,7 @@ backup:master:
       else
         echo "❌ Failed to create backup tag. Response: $TAG_RESPONSE"
         echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+        exit 1
       fi
       
       # Create backup branch
@@ -65,7 +80,10 @@ backup:master:
       else
         echo "❌ Failed to create backup branch. Response: $BRANCH_RESPONSE"
         echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+        exit 1
       fi
+      
+      echo "✅ Backup completed successfully"
   only:
     - master
   when: always
