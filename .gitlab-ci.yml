@@ -52,15 +52,35 @@ backup:master:
       echo "API URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
       echo "Commit SHA: $COMMIT_SHA"
       
+      # Test if curl is available
+      if ! command -v curl &> /dev/null; then
+        echo "❌ ERROR: curl command not found"
+        exit 1
+      fi
+      
+      # Test basic connectivity
+      echo "Testing connectivity to GitLab API..."
+      if ! curl -s --connect-timeout 10 "$CI_API_V4_URL/projects/$CI_PROJECT_ID" > /dev/null; then
+        echo "❌ ERROR: Cannot connect to GitLab API"
+        exit 1
+      fi
+      
+      echo "Making API request to create tag..."
       TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -v --request POST \
         --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"$BACKUP_MESSAGE\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags" 2>&1)
       
+      CURL_EXIT_CODE=$?
+      echo "Curl exit code: $CURL_EXIT_CODE"
       echo "Tag API response: $TAG_RESPONSE"
       
-      if echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+      if [ $CURL_EXIT_CODE -ne 0 ]; then
+        echo "❌ ERROR: Curl command failed with exit code: $CURL_EXIT_CODE"
+        echo "Response: $TAG_RESPONSE"
+        TAG_SUCCESS=false
+      elif echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
         echo "✅ Backup tag created successfully: $BACKUP_TAG"
         TAG_SUCCESS=true
       else
@@ -77,9 +97,15 @@ backup:master:
         --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches")
       
+      BRANCH_CURL_EXIT_CODE=$?
+      echo "Branch curl exit code: $BRANCH_CURL_EXIT_CODE"
       echo "Branch API response: $BRANCH_RESPONSE"
       
-      if echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
+      if [ $BRANCH_CURL_EXIT_CODE -ne 0 ]; then
+        echo "❌ ERROR: Branch curl command failed with exit code: $BRANCH_CURL_EXIT_CODE"
+        echo "Response: $BRANCH_RESPONSE"
+        BRANCH_SUCCESS=false
+      elif echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
         echo "✅ Backup branch created successfully: $BACKUP_BRANCH"
         BRANCH_SUCCESS=true
       else
