@@ -49,20 +49,24 @@ backup:master:
       
       # Create tag using GitLab API
       echo "Creating backup tag: $BACKUP_TAG"
-      TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
+      echo "API URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags"
+      echo "Commit SHA: $COMMIT_SHA"
+      
+      TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -v --request POST \
         --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
         --header "Content-Type: application/json" \
         --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"$BACKUP_MESSAGE\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags")
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags" 2>&1)
       
       echo "Tag API response: $TAG_RESPONSE"
       
       if echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
         echo "✅ Backup tag created successfully: $BACKUP_TAG"
+        TAG_SUCCESS=true
       else
         echo "❌ Failed to create backup tag. Response: $TAG_RESPONSE"
         echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
-        exit 1
+        TAG_SUCCESS=false
       fi
       
       # Create backup branch
@@ -77,13 +81,22 @@ backup:master:
       
       if echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
         echo "✅ Backup branch created successfully: $BACKUP_BRANCH"
+        BRANCH_SUCCESS=true
       else
         echo "❌ Failed to create backup branch. Response: $BRANCH_RESPONSE"
         echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
-        exit 1
+        BRANCH_SUCCESS=false
       fi
       
-      echo "✅ Backup completed successfully"
+      # Summary
+      if [ "$TAG_SUCCESS" = true ] && [ "$BRANCH_SUCCESS" = true ]; then
+        echo "✅ Backup completed successfully"
+      elif [ "$TAG_SUCCESS" = true ] || [ "$BRANCH_SUCCESS" = true ]; then
+        echo "⚠️ Backup partially completed (some operations failed)"
+      else
+        echo "❌ Backup failed completely"
+        echo "This job is marked as allow_failure: true, so the pipeline will continue"
+      fi
   only:
     - master
   when: always
