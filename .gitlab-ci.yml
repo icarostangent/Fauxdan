@@ -1,8 +1,8 @@
-stages:
-  - backup
-  - provision
-  - build
-  - deploy
+# stages:
+  # - backup
+  # - provision
+  # - build
+  # - deploy
 
 variables:
   ANSIBLE_HOST_KEY_CHECKING: "False"
