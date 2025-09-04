@@ -122,16 +122,16 @@
       debug:
         msg: "{{ docker_login_result.stdout_lines }}"
 
-    - name: Prune Docker system
-      shell: |
-        docker system prune -a -f
-      args:
-        chdir: "{{ workspace_dir }}"
-      register: docker_prune_result
+    # - name: Prune Docker system
+    #   shell: |
+    #     docker system prune -a -f
+    #   args:
+    #     chdir: "{{ workspace_dir }}"
+    #   register: docker_prune_result
 
-    - name: Show Docker prune results
-      debug:
-        msg: "{{ docker_prune_result.stdout_lines }}"
+    # - name: Show Docker prune results
+    #   debug:
+    #     msg: "{{ docker_prune_result.stdout_lines }}"
 
     - name: Pull latest Docker images
       shell: |
