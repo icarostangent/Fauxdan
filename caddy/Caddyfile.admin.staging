@@ -1,5 +1,5 @@
 # Staging admin panel configuration
-staging-admin.icarostangent.lab:8443 {
+-admin.staging.icarostangent.lab:8443 {
     # Enable TLS with self-signed certificate
     tls internal
     # Handle Django admin requests
