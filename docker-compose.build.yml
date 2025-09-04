@@ -17,6 +17,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod.scanner
 
+  db:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/db:latest
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+
   redis:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis:latest
     build:
@@ -29,7 +35,7 @@ services:
       context: ./
       dockerfile: ./caddy/Dockerfile
       args:
-        VUE_APP_API_URL: https://fauxdan.io
+        VUE_APP_API_URL: https://staging.fauxdan.io
 
   caddy-admin:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy:latest
@@ -37,7 +43,7 @@ services:
       context: ./
       dockerfile: ./caddy/Dockerfile
       args:
-        VUE_APP_API_URL: https://fauxdan.io
+        VUE_APP_API_URL: https://staging.fauxdan.icarostangent.lab
 
   tor:
     image: dperson/torproxy
