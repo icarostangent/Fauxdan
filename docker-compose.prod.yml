@@ -17,6 +17,8 @@ services:
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
       - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_started
     healthcheck:
@@ -70,10 +72,32 @@ services:
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_started
     cap_add:
       - NET_ADMIN
+
+  db:
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/db
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${DJANGO_DB_NAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
@@ -204,6 +228,9 @@ services:
       - "9187"
     environment:
       - DATA_SOURCE_NAME=postgresql://${DJANGO_DB_USER}:${DJANGO_DB_PASSWORD}@${DJANGO_DB_HOST}:${DJANGO_DB_PORT}/${DJANGO_DB_NAME}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Elasticsearch for log storage and search
   elasticsearch:
@@ -300,6 +327,7 @@ services:
       retries: 5
 
 volumes:
+  db_data:
   staticfiles:
   redis_data:
   caddy_data:
