@@ -320,9 +320,7 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=""
       - ELASTICSEARCH_PASSWORD=""
-    # depends_on:
-    #   elasticsearch:
-    #     condition: service_healthy
+    depends_on:
       logstash:
         condition: service_healthy
     healthcheck:
