@@ -1,3 +1,5 @@
+name: fauxdan
+
 services:
   backend:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend:latest
@@ -127,7 +129,7 @@ services:
 
   # Caddy-admin service for admin panel routing
   caddy-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy:latest
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy-admin:latest
     restart: unless-stopped
     ports:
       - "10.10.10.4:8443:8443"
@@ -245,7 +247,7 @@ services:
       - xpack.security.enrollment.enabled=false
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
       - bootstrap.memory_lock=true
     volumes:
       - ./monitoring/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
@@ -258,8 +260,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 5
+      timeout: 30s
+      retries: 10
+      start_period: 120s
 
   # Log forwarder to send Django logs to Logstash
   log-forwarder:
