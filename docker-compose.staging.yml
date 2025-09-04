@@ -1,6 +1,6 @@
 services:
   backend:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend:latest
     restart: unless-stopped
     expose:
       - "8000"
@@ -30,7 +30,7 @@ services:
 
   # Backend-admin service for admin-specific functionality
   backend-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend:latest
     restart: unless-stopped
     expose:
       - "8000"
@@ -59,7 +59,7 @@ services:
 
   # Scanner service for background processing
   scanner:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner:latest
     restart: unless-stopped
     volumes:
       - logs:/var/log/app
@@ -80,7 +80,7 @@ services:
       - NET_ADMIN
 
   db:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/db
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/db:latest
     restart: unless-stopped
     expose:
       - "5432"
@@ -100,7 +100,7 @@ services:
       retries: 5
 
   redis:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis:latest
     restart: unless-stopped
     expose:
       - "6379"
@@ -108,7 +108,7 @@ services:
       - redis_data:/data
 
   caddy:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy:latest
     restart: unless-stopped
     ports:
       - "0.0.0.0:80:80"
@@ -127,7 +127,7 @@ services:
 
   # Caddy-admin service for admin panel routing
   caddy-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy:latest
     restart: unless-stopped
     ports:
       - "10.10.10.4:8443:8443"
@@ -263,7 +263,7 @@ services:
 
   # Log forwarder to send Django logs to Logstash
   log-forwarder:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder:latest
     restart: unless-stopped
     volumes:
       - logs:/var/log/app
