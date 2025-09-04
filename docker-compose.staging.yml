@@ -1,6 +1,6 @@
 services:
   backend:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-backend
     restart: unless-stopped
     expose:
       - "8000"
@@ -15,7 +15,7 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
+      - DJANGO_ALLOWED_HOSTS=staging.fauxdan.io,staging-admin.fauxdan.io,localhost,127.0.0.1
     depends_on:
       db:
         condition: service_healthy
@@ -30,7 +30,7 @@ services:
 
   # Backend-admin service for admin-specific functionality
   backend-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-backend
     restart: unless-stopped
     expose:
       - "8000"
@@ -45,7 +45,7 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - DJANGO_ALLOWED_HOSTS=fauxdan.io,admin.fauxdan.io,localhost,127.0.0.1
+      - DJANGO_ALLOWED_HOSTS=staging.fauxdan.io,staging-admin.fauxdan.io,localhost,127.0.0.1
       - DJANGO_ADMIN_PORT=8000
     depends_on:
       redis:
@@ -59,7 +59,7 @@ services:
 
   # Scanner service for background processing
   scanner:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-scanner
     restart: unless-stopped
     volumes:
       - logs:/var/log/app
@@ -80,7 +80,7 @@ services:
       - NET_ADMIN
 
   db:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/db
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-db
     restart: unless-stopped
     expose:
       - "5432"
@@ -100,7 +100,7 @@ services:
       retries: 5
 
   redis:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-redis
     restart: unless-stopped
     expose:
       - "6379"
@@ -108,7 +108,7 @@ services:
       - redis_data:/data
 
   caddy:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-caddy
     restart: unless-stopped
     ports:
       - "0.0.0.0:80:80"
@@ -116,7 +116,7 @@ services:
     environment:
       - VUE_APP_API_URL=${VUE_APP_API_URL}
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/Caddyfile.staging:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_logs:/var/log/caddy
       - caddy_certs:/etc/caddy/certs
@@ -127,12 +127,12 @@ services:
 
   # Caddy-admin service for admin panel routing
   caddy-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-caddy
     restart: unless-stopped
     ports:
       - "10.10.10.4:8443:8443"
     volumes:
-      - ./caddy/Caddyfile.admin:/etc/caddy/Caddyfile
+      - ./caddy/Caddyfile.admin.staging:/etc/caddy/Caddyfile
       - ./monitoring/admin:/admin
       - caddy_data:/data
       - caddy_logs:/var/log/caddy
@@ -171,7 +171,7 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-      - '--web.external-url=https://fauxdan-admin.icarostangent.lab:8443/prometheus'
+      - '--web.external-url=https://staging-admin.icarostangent.lab:8443/prometheus'
 
   # Grafana for dashboards and visualization
   grafana:
@@ -189,7 +189,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
-      - GF_SERVER_ROOT_URL=https://fauxdan-admin.icarostangent.lab:8443/grafana/
+      - GF_SERVER_ROOT_URL=https://staging-admin.icarostangent.lab:8443/grafana/
       - GF_SERVER_SERVE_FROM_SUBPATH=true
     depends_on:
       - prometheus
@@ -263,7 +263,7 @@ services:
 
   # Log forwarder to send Django logs to Logstash
   log-forwarder:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/staging-log-forwarder
     restart: unless-stopped
     volumes:
       - logs:/var/log/app

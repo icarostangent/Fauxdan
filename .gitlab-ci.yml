@@ -72,24 +72,23 @@ provision:
   only:
     - master
 
-build:production:
+build:staging:
   stage: build
   before_script:
     - echo "$GITLAB_REGISTRY_PASSWORD" | docker login gitlab.icarostangent.lab:5050 -u $GITLAB_REGISTRY_USERNAME --password-stdin
   script:
-    # - docker compose -f docker-compose.build.yml pull
-    - docker compose -f docker-compose.build.yml build
-    - docker compose -f docker-compose.build.yml push
+    - IMAGE_PREFIX=staging- docker compose -f docker-compose.build.yml build
+    - IMAGE_PREFIX=staging- docker compose -f docker-compose.build.yml push
     - docker system prune -f
   only:
     - master
   tags:
     - docker
 
-deploy:production:
+deploy:staging:
   stage: deploy
   environment:
-    name: prod
+    name: staging
   script:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
@@ -107,4 +106,4 @@ deploy:production:
     - master
   needs:
     - provision
-    - build:production
+    - build:staging

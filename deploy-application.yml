@@ -125,7 +125,7 @@
     - name: Pull latest Docker images
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+        docker compose -f docker-compose.staging.yml --env-file .env.staging pull
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_pull_result
@@ -137,7 +137,7 @@
     - name: Start Docker Compose services
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans
+        docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_up_result
@@ -160,7 +160,7 @@
     - name: Check Caddy logs
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.prod.yml --env-file .env.prod logs caddy
+        docker compose -f docker-compose.staging.yml --env-file .env.staging logs caddy
       args:
         chdir: "{{ workspace_dir }}"
       register: caddy_logs
@@ -187,7 +187,7 @@
     - name: Verify Docker services are running
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+        docker compose -f docker-compose.staging.yml --env-file .env.staging ps
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_ps_result
@@ -199,7 +199,7 @@
     - name: Check for any failed containers
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.prod.yml --env-file .env.prod ps --filter "status=exited"
+        docker compose -f docker-compose.staging.yml --env-file .env.staging ps --filter "status=exited"
       args:
         chdir: "{{ workspace_dir }}"
       register: failed_containers
