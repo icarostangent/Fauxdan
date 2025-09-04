@@ -1,30 +1,30 @@
 services:
   backend:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}${IMAGE_PREFIX:-}backend
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.backend
       
   backend-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}backend
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.backend
       
   scanner:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}scanner
     build:
       context: ./backend
       dockerfile: Dockerfile.prod.scanner
 
   redis:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}redis
     build:
       context: ./redis
       dockerfile: Dockerfile
 
   caddy: 
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}caddy
     build:
       context: ./
       dockerfile: ./caddy/Dockerfile
@@ -32,7 +32,7 @@ services:
         VUE_APP_API_URL: https://fauxdan.io
 
   caddy-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}caddy
     build:
       context: ./
       dockerfile: ./caddy/Dockerfile
@@ -68,7 +68,7 @@ services:
     image: docker.elastic.co/kibana/kibana:8.11.0
 
   log-forwarder:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/log-forwarder
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/${IMAGE_PREFIX:-}log-forwarder
     build:
       context: ./monitoring
       dockerfile: Dockerfile.log-forwarder
