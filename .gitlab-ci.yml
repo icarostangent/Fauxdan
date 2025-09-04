@@ -72,6 +72,14 @@ backup:master:
 
 provision:
   stage: provision
+  before_script:
+    # Install Python and pip if not available
+    - python3 --version || (apt-get update && apt-get install -y python3 python3-pip)
+    - pip3 --version || (apt-get update && apt-get install -y python3-pip)
+    # Install Ansible
+    - ansible --version || pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
   script:
     - echo "$SSH_PRIVATE_KEY" > id_rsa.base64
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
@@ -99,6 +107,14 @@ deploy:production:
   stage: deploy
   environment:
     name: prod
+  before_script:
+    # Install Python and pip if not available
+    - python3 --version || (apt-get update && apt-get install -y python3 python3-pip)
+    - pip3 --version || (apt-get update && apt-get install -y python3-pip)
+    # Install Ansible
+    - ansible --version || pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
   script:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
