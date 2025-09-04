@@ -89,6 +89,7 @@ deploy:staging:
   environment:
     name: staging
   script:
+    - echo "lol..."
     # - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     # - chmod 600 id_rsa
     # - |
