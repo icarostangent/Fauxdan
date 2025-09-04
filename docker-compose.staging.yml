@@ -94,10 +94,11 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${DJANGO_DB_NAME}"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${DJANGO_DB_NAME} || exit 1"]
+      interval: 15s
+      timeout: 30s
+      retries: 10
+      start_period: 60s
 
   redis:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/redis:latest
