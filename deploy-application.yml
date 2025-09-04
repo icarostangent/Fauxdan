@@ -94,15 +94,15 @@
       register: docker_compose_version
       changed_when: false
 
-    - name: Check if .env.prod is present
+    - name: Check if .env is present
       stat:
-        path: "{{ workspace_dir }}/.env.prod"
+        path: "{{ workspace_dir }}/.env"
       register: env_file_exists
 
-    - name: Create .env.prod file from gitlab variables
+    - name: Create .env file from gitlab variables
       template:
         src: "./env.template"
-        dest: "{{ workspace_dir }}/.env.prod"
+        dest: "{{ workspace_dir }}/.env"
         owner: root
         group: root
         mode: '0644'
@@ -137,7 +137,7 @@
     - name: Pull latest Docker images
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging pull
+        docker compose -f docker-compose.staging.yml --env-file .env pull
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_pull_result
@@ -149,7 +149,7 @@
     - name: Start Docker Compose services
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --remove-orphans
+        docker compose -f docker-compose.staging.yml --env-file .env up -d --remove-orphans
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_up_result
@@ -173,7 +173,7 @@
     - name: Check Database logs
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging logs --tail=50 db
+        docker compose -f docker-compose.staging.yml --env-file .env logs --tail=50 db
       args:
         chdir: "{{ workspace_dir }}"
       register: db_logs
@@ -186,7 +186,7 @@
     - name: Check Elasticsearch logs
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging logs --tail=50 elasticsearch
+        docker compose -f docker-compose.staging.yml --env-file .env logs --tail=50 elasticsearch
       args:
         chdir: "{{ workspace_dir }}"
       register: elasticsearch_logs
@@ -199,7 +199,7 @@
     - name: Check Caddy logs
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging logs caddy
+        docker compose -f docker-compose.staging.yml --env-file .env logs caddy
       args:
         chdir: "{{ workspace_dir }}"
       register: caddy_logs
@@ -228,7 +228,7 @@
     - name: Verify Docker services are running
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging ps
+        docker compose -f docker-compose.staging.yml --env-file .env ps
       args:
         chdir: "{{ workspace_dir }}"
       register: docker_ps_result
@@ -240,7 +240,7 @@
     - name: Check for any failed containers
       shell: |
         cd {{ workspace_dir }}
-        docker compose -f docker-compose.staging.yml --env-file .env.staging ps --filter "status=exited"
+        docker compose -f docker-compose.staging.yml --env-file .env ps --filter "status=exited"
       args:
         chdir: "{{ workspace_dir }}"
       register: failed_containers
