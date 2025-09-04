@@ -32,7 +32,7 @@ services:
         VUE_APP_API_URL: https://staging.fauxdan.io
 
   caddy-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy:latest
+    image: gitlab.icarostangent.lab:5050/josh/fauxdan/caddy-admin:latest
     build:
       context: ./
       dockerfile: ./caddy/Dockerfile
