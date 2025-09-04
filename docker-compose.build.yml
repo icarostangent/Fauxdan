@@ -5,12 +5,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod.backend
       
-  backend-admin:
-    image: gitlab.icarostangent.lab:5050/josh/fauxdan/backend:latest
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.prod.backend
-      
   scanner:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner:latest
     build:

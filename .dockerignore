@@ -1,0 +1,17 @@
+# Large directories to exclude
+node_modules/
+staticfiles/
+logs/
+.git/
+*.md
+.env*
+
+# Build artifacts
+backend/masscan/output/
+celerybeat-schedule
+paused.conf
+
+# Development files
+*.log
+.DS_Store
+Thumbs.db
