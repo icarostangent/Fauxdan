@@ -46,7 +46,7 @@ services:
     volumes:
       - ./backend:/app 
       - ./static:/static
-      - ./logs:/var/log/app
+      - logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -68,7 +68,7 @@ services:
       dockerfile: Dockerfile.dev.scanner
     volumes:
       - ./backend:/app 
-      - ./logs:/var/log/app
+      - logs:/var/log/app
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=True
