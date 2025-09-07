@@ -1,0 +1,245 @@
+---
+- name: Initialize Docker Swarm Master Node
+  hosts: swarm-master
+  become: yes
+  vars:
+    swarm_advertise_addr: "{{ ansible_default_ipv4.address }}"
+    swarm_listen_addr: "0.0.0.0:2377"
+    docker_user: "{{ ansible_user }}"
+    
+  tasks:
+    # Check if Docker is running
+    - name: Check Docker service status
+      service:
+        name: docker
+        state: started
+      register: docker_status
+
+    - name: Wait for Docker to be ready
+      wait_for:
+        port: 2375
+        host: localhost
+        timeout: 30
+      when: docker_status.changed
+
+    # Initialize Docker Swarm
+    - name: Check if Docker Swarm is already initialized
+      command: docker info --format "{{ '{{.Swarm.LocalNodeState}}' }}"
+      register: swarm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Initialize Docker Swarm
+      command: >
+        docker swarm init 
+        --advertise-addr {{ swarm_advertise_addr }}
+        --listen-addr {{ swarm_listen_addr }}
+      when: swarm_status.stdout != "active"
+      register: swarm_init_result
+
+    - name: Get worker join token
+      command: docker swarm join-token worker -q
+      register: worker_token
+      when: swarm_status.stdout == "active" or swarm_init_result is defined
+
+    - name: Get manager join token
+      command: docker swarm join-token manager -q
+      register: manager_token
+      when: swarm_status.stdout == "active" or swarm_init_result is defined
+
+    - name: Display swarm join tokens
+      debug:
+        msg:
+          - "=== Docker Swarm Initialization Complete ==="
+          - "Swarm Manager: {{ inventory_hostname }}"
+          - "Advertise Address: {{ swarm_advertise_addr }}"
+          - "Listen Address: {{ swarm_listen_addr }}"
+          - ""
+          - "Worker Join Token: {{ worker_token.stdout }}"
+          - "Manager Join Token: {{ manager_token.stdout }}"
+          - ""
+          - "To join worker nodes, run:"
+          - "docker swarm join --token {{ worker_token.stdout }} {{ swarm_advertise_addr }}:2377"
+          - ""
+          - "To join manager nodes, run:"
+          - "docker swarm join --token {{ manager_token.stdout }} {{ swarm_advertise_addr }}:2377"
+
+    # Create Swarm management directories
+    - name: Create Swarm management directory
+      file:
+        path: /opt/swarm
+        state: directory
+        mode: '0755'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+
+    - name: Create Swarm secrets directory
+      file:
+        path: /opt/swarm/secrets
+        state: directory
+        mode: '0700'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+
+    - name: Create Swarm configs directory
+      file:
+        path: /opt/swarm/configs
+        state: directory
+        mode: '0755'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+
+    # Install Docker Swarm management tools
+    - name: Install Docker Swarm management script
+      copy:
+        content: |
+          #!/bin/bash
+          # Docker Swarm Management Script
+          
+          case "$1" in
+            status)
+              echo "=== Docker Swarm Status ==="
+              docker node ls
+              echo ""
+              echo "=== Docker Services ==="
+              docker service ls
+              ;;
+            nodes)
+              docker node ls
+              ;;
+            services)
+              docker service ls
+              ;;
+            logs)
+              if [ -z "$2" ]; then
+                echo "Usage: $0 logs <service_name>"
+                exit 1
+              fi
+              docker service logs "$2"
+              ;;
+            scale)
+              if [ -z "$2" ] || [ -z "$3" ]; then
+                echo "Usage: $0 scale <service_name> <replicas>"
+                exit 1
+              fi
+              docker service scale "$2=$3"
+              ;;
+            update)
+              if [ -z "$2" ]; then
+                echo "Usage: $0 update <service_name>"
+                exit 1
+              fi
+              docker service update --force "$2"
+              ;;
+            stack)
+              if [ -z "$2" ]; then
+                echo "Usage: $0 stack {deploy|rm|ls} <stack_name> [compose_file]"
+                exit 1
+              fi
+              case "$2" in
+                deploy)
+                  if [ -z "$3" ] || [ -z "$4" ]; then
+                    echo "Usage: $0 stack deploy <stack_name> <compose_file>"
+                    exit 1
+                  fi
+                  docker stack deploy -c "$4" "$3"
+                  ;;
+                rm)
+                  if [ -z "$3" ]; then
+                    echo "Usage: $0 stack rm <stack_name>"
+                    exit 1
+                  fi
+                  docker stack rm "$3"
+                  ;;
+                ls)
+                  docker stack ls
+                  ;;
+                *)
+                  echo "Usage: $0 stack {deploy|rm|ls} <stack_name> [compose_file]"
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "Docker Swarm Management Script"
+              echo "Usage: $0 {status|nodes|services|logs|scale|update|stack}"
+              echo ""
+              echo "Commands:"
+              echo "  status     - Show swarm and service status"
+              echo "  nodes      - List all nodes"
+              echo "  services   - List all services"
+              echo "  logs       - Show service logs"
+              echo "  scale      - Scale a service"
+              echo "  update     - Force update a service"
+              echo "  stack      - Manage Docker stacks"
+              exit 1
+              ;;
+          esac
+        dest: /usr/local/bin/swarm-mgmt
+        mode: '0755'
+
+    # Save join tokens to files for later use
+    - name: Save worker join token
+      copy:
+        content: "{{ worker_token.stdout }}"
+        dest: /opt/swarm/worker-token
+        mode: '0600'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+      when: worker_token.stdout is defined
+
+    - name: Save manager join token
+      copy:
+        content: "{{ manager_token.stdout }}"
+        dest: /opt/swarm/manager-token
+        mode: '0600'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+      when: manager_token.stdout is defined
+
+    - name: Save swarm manager address
+      copy:
+        content: "{{ swarm_advertise_addr }}:2377"
+        dest: /opt/swarm/manager-address
+        mode: '0644'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+
+    # Label the master node
+    - name: Get master node ID
+      command: docker info --format "{{ '{{.Swarm.NodeID}}' }}"
+      register: master_node_id
+      changed_when: false
+
+    - name: Label master node
+      command: >
+        docker node update 
+        --label-add role=master
+        --label-add tier=management
+        --label-add node.type=swarm-master
+        {{ master_node_id.stdout }}
+      when: master_node_id.stdout is defined
+
+    # Verify swarm status
+    - name: Verify Docker Swarm status
+      command: docker info --format "{{ '{{.Swarm.LocalNodeState}}' }}"
+      register: swarm_verify
+      changed_when: false
+
+    - name: Get Docker Swarm node information
+      command: docker node ls --format "{{ '{{.ID}} {{.Hostname}} {{.Status}} {{.Availability}} {{.ManagerStatus}}' }}"
+      register: swarm_nodes
+      changed_when: false
+
+    - name: Display final swarm status
+      debug:
+        msg:
+          - "=== Swarm Status Verification ==="
+          - "Swarm state: {{ swarm_verify.stdout }}"
+          - "Nodes in swarm:"
+          - "{{ swarm_nodes.stdout_lines | join('\n') }}"
+          - ""
+          - "Management commands available:"
+          - "  swarm-mgmt status    - Show swarm status"
+          - "  swarm-mgmt nodes     - List nodes"
+          - "  swarm-mgmt services  - List services"

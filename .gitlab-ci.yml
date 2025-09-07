@@ -1,11 +1,14 @@
 stages:
   - backup
-  - provision
-  - build
-  - deploy
+  - install-wireguard
+  - provision-docker
+  - initialize-swarm
+  - join-nodes
+  - deploy-application
 
 variables:
   ANSIBLE_HOST_KEY_CHECKING: "False"
+  ANSIBLE_STDOUT_CALLBACK: "yaml"
 
 backup:master:
   stage: backup
@@ -53,12 +56,11 @@ backup:master:
     - master
   when: always
 
-provision:
-  stage: provision
+install:wireguard:
+  stage: install-wireguard
   before_script:
     # Install Python and pip if not available
     - apt-get update && apt-get install -y python3 python3-pip
-    - apt-get update && apt-get install -y python3-pip
     # Install Ansible
     - pip3 install ansible
     # Install required Ansible collections
@@ -67,11 +69,87 @@ provision:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
     - ansible all -i hosts.ini --private-key id_rsa -m ping
-    - ansible-playbook -K -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
+    - |
+      ansible-playbook -i hosts.ini --private-key id_rsa 00-install-wireguard.yml \
+        -e "edge_private_key=$EDGE_PRIVATE_KEY" \
+        -e "edge_public_key=$EDGE_PUBLIC_KEY" \
+        -e "edge_peer_public_key=$EDGE_PEER_PUBLIC_KEY" \
+        -e "edge_peer_endpoint=$EDGE_PEER_ENDPOINT"
   only:
     - master
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
 
-build:
+provision:docker:
+  stage: provision-docker
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible all -i hosts.ini --private-key id_rsa -m ping
+    - ansible-playbook -i hosts.ini --private-key id_rsa 01-provision-docker.yml
+  only:
+    - master
+  needs:
+    - install:wireguard
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+initialize:swarm:
+  stage: initialize-swarm
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible-playbook -i hosts.ini --private-key id_rsa 02-initialize-swarm.yml
+  only:
+    - master
+  needs:
+    - provision:docker
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+join:nodes:
+  stage: join-nodes
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible-playbook -i hosts.ini --private-key id_rsa 03-join-swarm-nodes.yml
+  only:
+    - master
+  needs:
+    - initialize:swarm
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+build:images:
   stage: build
   before_script:
     - echo "$GITLAB_REGISTRY_PASSWORD" | docker login gitlab.icarostangent.lab:5050 -u $GITLAB_REGISTRY_USERNAME --password-stdin
@@ -84,26 +162,35 @@ build:
   tags:
     - docker
 
-deploy:staging:
-  stage: deploy
+deploy:application:
+  stage: deploy-application
   environment:
-    name: staging
+    name: production
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
   script:
-    - echo "lol..."
-    # - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
-    # - chmod 600 id_rsa
-    # - |
-    #   ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
-    #     -e "ansible_become_password=$ROOT_PASSWORD" \
-    #     -e "django_db_password=$DJANGO_DB_PASSWORD" \
-    #     -e "django_secret_key=$DJANGO_SECRET_KEY" \
-    #     -e "postgres_password=$POSTGRES_PASSWORD" \
-    #     -e "fauxdan_ssh_private_key=$FAUXDAN_SSH_PRIVATE_KEY" \
-    #     -e "fauxdan_ssh_public_key=$FAUXDAN_SSH_PUBLIC_KEY" \
-    #     -e "gitlab_registry_username=$GITLAB_REGISTRY_USERNAME" \
-    #     -e "gitlab_registry_password=$GITLAB_REGISTRY_PASSWORD"
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - |
+      ansible-playbook -i hosts.ini --private-key id_rsa 04-deploy-application.yml \
+        -e "postgres_password=$POSTGRES_PASSWORD" \
+        -e "django_db_password=$DJANGO_DB_PASSWORD" \
+        -e "django_secret_key=$DJANGO_SECRET_KEY" \
+        -e "fauxdan_ssh_private_key=$FAUXDAN_SSH_PRIVATE_KEY" \
+        -e "fauxdan_ssh_public_key=$FAUXDAN_SSH_PUBLIC_KEY" \
+        -e "gitlab_registry_username=$GITLAB_REGISTRY_USERNAME" \
+        -e "gitlab_registry_password=$GITLAB_REGISTRY_PASSWORD"
   only:
     - master
   needs:
-    - provision
-    - build
+    - join:nodes
+    - build:images
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
