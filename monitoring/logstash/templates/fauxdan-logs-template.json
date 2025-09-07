@@ -1,0 +1,79 @@
+{
+  "index_patterns": ["fauxdan-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.refresh_interval": "5s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "message": {
+          "type": "text",
+          "analyzer": "standard"
+        },
+        "log_level": {
+          "type": "keyword"
+        },
+        "container": {
+          "properties": {
+            "name": {
+              "type": "keyword"
+            },
+            "id": {
+              "type": "keyword"
+            }
+          }
+        },
+        "client_ip": {
+          "type": "ip"
+        },
+        "method": {
+          "type": "keyword"
+        },
+        "request_path": {
+          "type": "keyword"
+        },
+        "status_code": {
+          "type": "integer"
+        },
+        "response_size": {
+          "type": "integer"
+        },
+        "user_agent": {
+          "type": "text"
+        },
+        "referer": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "project": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "user_id": {
+          "type": "keyword"
+        },
+        "session_id": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "type": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

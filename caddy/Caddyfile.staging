@@ -1,0 +1,32 @@
+staging.fauxdan.io, localhost {
+
+    # Handle analytics requests
+    handle /analytics/* {
+        reverse_proxy backend:8000
+    }
+
+    # Handle API requests - must be first and most specific
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Handle static files - strip /static prefix and serve from staticfiles
+    handle_path /static/* {
+        root * /staticfiles
+        file_server
+    }
+
+    # Handle all other requests - serve index.html for SPA routing
+    handle {
+        root * /frontend
+        file_server
+        try_files {path} /index.html
+    }
+
+    # Enable logging
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

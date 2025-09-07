@@ -1,0 +1,228 @@
+---
+- name: Join Nodes to Docker Swarm
+  hosts: swarm-edge,swarm-worker,swarm-storage
+  become: yes
+  vars:
+    docker_user: "{{ ansible_user }}"
+    swarm_manager_host: "{{ hostvars[groups['swarm-master'][0]]['ansible_default_ipv4']['address'] }}"
+    swarm_manager_port: "2377"
+    
+  tasks:
+    # Get join tokens from master node
+    - name: Get worker join token from master
+      slurp:
+        src: /opt/swarm/worker-token
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+      register: worker_token_file
+
+    - name: Get manager join token from master
+      slurp:
+        src: /opt/swarm/manager-token
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+      register: manager_token_file
+
+    - name: Get manager address from master
+      slurp:
+        src: /opt/swarm/manager-address
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+      register: manager_address_file
+
+    - name: Set join tokens
+      set_fact:
+        worker_token: "{{ worker_token_file.content | b64decode | trim }}"
+        manager_token: "{{ manager_token_file.content | b64decode | trim }}"
+        manager_address: "{{ manager_address_file.content | b64decode | trim }}"
+
+    # Check if node is already in swarm
+    - name: Check if node is already in swarm
+      command: docker info --format "{{ '{{.Swarm.LocalNodeState}}' }}"
+      register: swarm_status
+      changed_when: false
+      failed_when: false
+
+    # Join swarm based on node type
+    - name: Join swarm as manager (edge nodes)
+      command: >
+        docker swarm join 
+        --token {{ manager_token }}
+        {{ manager_address }}
+      when: 
+        - "'swarm-edge' in group_names"
+        - swarm_status.stdout != "active"
+      register: join_result
+
+    - name: Join swarm as worker (worker and storage nodes)
+      command: >
+        docker swarm join 
+        --token {{ worker_token }}
+        {{ manager_address }}
+      when: 
+        - "'swarm-worker' in group_names or 'swarm-storage' in group_names"
+        - swarm_status.stdout != "active"
+      register: join_result
+
+    # Wait for join to complete
+    - name: Wait for swarm join to complete
+      wait_for:
+        timeout: 30
+      when: join_result is defined
+
+    # Verify join status
+    - name: Verify swarm join status
+      command: docker info --format "{{ '{{.Swarm.LocalNodeState}}' }}"
+      register: join_verify
+      changed_when: false
+
+    - name: Get node information
+      command: docker info --format "{{ '{{.Swarm.NodeID}} {{.Swarm.NodeAddr}} {{.Swarm.LocalNodeState}}' }}"
+      register: node_info
+      changed_when: false
+
+    # Configure comprehensive node labels based on inventory groups
+    - name: Set comprehensive labels for edge nodes
+      command: >
+        docker node update 
+        --label-add role=edge
+        --label-add tier=public
+        --label-add node.type=swarm-edge
+        --label-add service.placement=edge
+        --label-add network.exposure=public
+        --label-add workload.type=frontend
+        --label-add ssl.termination=true
+        --label-add load.balancer=true
+        {{ node_info.stdout.split()[0] }}
+      when: 
+        - "'swarm-edge' in group_names"
+        - join_verify.stdout == "active"
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+
+    - name: Set comprehensive labels for worker nodes
+      command: >
+        docker node update 
+        --label-add role=worker
+        --label-add tier=application
+        --label-add node.type=swarm-worker
+        --label-add service.placement=worker
+        --label-add network.exposure=internal
+        --label-add workload.type=backend
+        --label-add scaling.enabled=true
+        --label-add monitoring.enabled=true
+        {{ node_info.stdout.split()[0] }}
+      when: 
+        - "'swarm-worker' in group_names"
+        - join_verify.stdout == "active"
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+
+    - name: Set comprehensive labels for storage nodes
+      command: >
+        docker node update 
+        --label-add role=storage
+        --label-add tier=persistence
+        --label-add node.type=swarm-storage
+        --label-add service.placement=storage
+        --label-add network.exposure=internal
+        --label-add workload.type=database
+        --label-add storage.type=persistent
+        --label-add backup.enabled=true
+        --label-add data.critical=true
+        {{ node_info.stdout.split()[0] }}
+      when: 
+        - "'swarm-storage' in group_names"
+        - join_verify.stdout == "active"
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+
+    # Display join results
+    - name: Display join results
+      debug:
+        msg:
+          - "=== Node Join Results ==="
+          - "Host: {{ inventory_hostname }}"
+          - "Group: {{ group_names }}"
+          - "Swarm Status: {{ join_verify.stdout }}"
+          - "Node ID: {{ node_info.stdout.split()[0] if node_info.stdout.split() | length > 0 else 'Unknown' }}"
+          - "Node Address: {{ node_info.stdout.split()[1] if node_info.stdout.split() | length > 1 else 'Unknown' }}"
+          - "Manager Address: {{ manager_address }}"
+
+    # Display node labels
+    - name: Get node labels
+      command: docker node inspect {{ node_info.stdout.split()[0] }} --format "{{ '{{range $key, $value := .Spec.Labels}}{{$key}}={{$value}} {{end}}' }}"
+      register: node_labels
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+      when: 
+        - join_verify.stdout == "active"
+        - node_info.stdout.split() | length > 0
+
+    - name: Display node labels
+      debug:
+        msg:
+          - "=== Node Labels Applied ==="
+          - "Host: {{ inventory_hostname }}"
+          - "Labels: {{ node_labels.stdout }}"
+      when: node_labels is defined
+
+    # Create node-specific directories
+    - name: Create node-specific directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+      loop:
+        - /opt/swarm
+        - /opt/swarm/logs
+        - /opt/swarm/data
+
+    # Install node management script
+    - name: Install node management script
+      copy:
+        content: |
+          #!/bin/bash
+          # Docker Swarm Node Management Script
+          
+          case "$1" in
+            status)
+              echo "=== Node Status ==="
+              docker info --format "{{ '{{.Swarm.LocalNodeState}}' }}"
+              echo ""
+              echo "=== Node Information ==="
+              docker info --format "{{ '{{.Swarm.NodeID}} {{.Swarm.NodeAddr}}' }}"
+              ;;
+            leave)
+              echo "Leaving Docker Swarm..."
+              docker swarm leave
+              ;;
+            logs)
+              if [ -z "$2" ]; then
+                echo "Usage: $0 logs <service_name>"
+                exit 1
+              fi
+              docker service logs "$2"
+              ;;
+            *)
+              echo "Docker Swarm Node Management Script"
+              echo "Usage: $0 {status|leave|logs}"
+              echo ""
+              echo "Commands:"
+              echo "  status     - Show node status"
+              echo "  leave      - Leave the swarm"
+              echo "  logs       - Show service logs"
+              exit 1
+              ;;
+          esac
+        dest: /usr/local/bin/node-mgmt
+        mode: '0755'
+
+    # Final verification
+    - name: Final swarm verification
+      command: docker node ls
+      register: final_swarm_status
+      delegate_to: "{{ groups['swarm-master'][0] }}"
+      when: inventory_hostname == groups['swarm-master'][0]
+
+    - name: Display final swarm status
+      debug:
+        msg:
+          - "=== Final Swarm Status ==="
+          - "{{ final_swarm_status.stdout_lines | join('\n') }}"
+      when: inventory_hostname == groups['swarm-master'][0]

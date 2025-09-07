@@ -1,92 +1,159 @@
 stages:
   - backup
-  - provision
-  - build
-  - deploy
+  - install-wireguard
+  - provision-docker
+  - initialize-swarm
+  - join-nodes
+  - deploy-application
 
 variables:
   ANSIBLE_HOST_KEY_CHECKING: "False"
+  ANSIBLE_STDOUT_CALLBACK: "yaml"
 
 backup:master:
   stage: backup
+  allow_failure: true
   script:
     - echo "Creating backup of master branch..."
     - |
-      # Create backup using GitLab API with source branch info
+      # Simple backup using git commands instead of API calls
       COMMIT_SHA=$(git rev-parse HEAD)
-      
-      # Get source branch information
-      if [ -n "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" ]; then
-        SOURCE_BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
-        BACKUP_TAG="backup-${SOURCE_BRANCH}-$(date +%Y%m%d-%H%M%S)"
-        BACKUP_BRANCH="backup/${SOURCE_BRANCH}-$(date +%Y%m%d-%H%M%S)"
-        BACKUP_MESSAGE="Automated backup from merge request: $CI_MERGE_REQUEST_TITLE (Source: $SOURCE_BRANCH)"
-        echo "Creating backup from merge request: $CI_MERGE_REQUEST_TITLE"
-        echo "Source branch: $SOURCE_BRANCH"
-      else
-        # Fallback for direct pushes to master
-        BACKUP_TAG="backup-master-$(date +%Y%m%d-%H%M%S)"
-        BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
-        BACKUP_MESSAGE="Automated backup before deployment (Direct push to master)"
-        echo "Creating backup from direct push to master"
-      fi
+      BACKUP_TAG="backup-master-$(date +%Y%m%d-%H%M%S)"
+      BACKUP_BRANCH="backup/master-$(date +%Y%m%d-%H%M%S)"
       
       echo "Creating backup tag: $BACKUP_TAG for commit: $COMMIT_SHA"
       
-      # Create tag using GitLab API
-      echo "Creating backup tag: $BACKUP_TAG"
-      TAG_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
-        --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
-        --header "Content-Type: application/json" \
-        --data "{\"tag_name\": \"$BACKUP_TAG\", \"ref\": \"$COMMIT_SHA\", \"message\": \"$BACKUP_MESSAGE\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags")
-      
-      echo "Tag API response: $TAG_RESPONSE"
-      
-      if echo "$TAG_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
-        echo "✅ Backup tag created successfully: $BACKUP_TAG"
+      # Create local tag
+      if git tag "$BACKUP_TAG" "$COMMIT_SHA"; then
+        echo "✅ Local backup tag created: $BACKUP_TAG"
+        # Push tag to remote
+        if git push origin "$BACKUP_TAG"; then
+          echo "✅ Backup tag pushed to remote: $BACKUP_TAG"
+        else
+          echo "⚠️ Local tag created but failed to push to remote"
+        fi
       else
-        echo "❌ Failed to create backup tag. Response: $TAG_RESPONSE"
-        echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+        echo "❌ Failed to create local backup tag"
       fi
       
-      # Create backup branch
-      echo "Creating backup branch: $BACKUP_BRANCH"
-      BRANCH_RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}\n" -s --request POST \
-        --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
-        --header "Content-Type: application/json" \
-        --data "{\"branch\": \"$BACKUP_BRANCH\", \"ref\": \"$COMMIT_SHA\"}" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/branches")
-      
-      echo "Branch API response: $BRANCH_RESPONSE"
-      
-      if echo "$BRANCH_RESPONSE" | grep -q "HTTP_CODE:201\|HTTP_CODE:200"; then
-        echo "✅ Backup branch created successfully: $BACKUP_BRANCH"
+      # Create local backup branch
+      if git checkout -b "$BACKUP_BRANCH" "$COMMIT_SHA"; then
+        echo "✅ Local backup branch created: $BACKUP_BRANCH"
+        # Push branch to remote
+        if git push origin "$BACKUP_BRANCH"; then
+          echo "✅ Backup branch pushed to remote: $BACKUP_BRANCH"
+        else
+          echo "⚠️ Local branch created but failed to push to remote"
+        fi
+        # Switch back to detached HEAD
+        git checkout "$COMMIT_SHA"
       else
-        echo "❌ Failed to create backup branch. Response: $BRANCH_RESPONSE"
-        echo "Please check that GITLAB_API_TOKEN is set and has 'api' scope"
+        echo "❌ Failed to create local backup branch"
       fi
+      
+      echo "✅ Backup process completed"
   only:
     - master
   when: always
 
-provision:
-  stage: provision
+install:wireguard:
+  stage: install-wireguard
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
   script:
-    - echo "$SSH_PRIVATE_KEY" > id_rsa.base64
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
     - ansible all -i hosts.ini --private-key id_rsa -m ping
-    - ansible-playbook -K -i hosts.ini --private-key id_rsa provision-server.yml --extra-vars "ansible_become_password=$ROOT_PASSWORD"
+    - |
+      ansible-playbook -i hosts.ini --private-key id_rsa 00-install-wireguard.yml \
+        -e "edge_private_key=$EDGE_PRIVATE_KEY" \
+        -e "edge_public_key=$EDGE_PUBLIC_KEY" \
+        -e "edge_peer_public_key=$EDGE_PEER_PUBLIC_KEY" \
+        -e "edge_peer_endpoint=$EDGE_PEER_ENDPOINT"
   only:
     - master
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
 
-build:production:
+provision:docker:
+  stage: provision-docker
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible all -i hosts.ini --private-key id_rsa -m ping
+    - ansible-playbook -i hosts.ini --private-key id_rsa 01-provision-docker.yml
+  only:
+    - master
+  needs:
+    - install:wireguard
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+initialize:swarm:
+  stage: initialize-swarm
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible-playbook -i hosts.ini --private-key id_rsa 02-initialize-swarm.yml
+  only:
+    - master
+  needs:
+    - provision:docker
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+join:nodes:
+  stage: join-nodes
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
+  script:
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
+    - chmod 600 id_rsa
+    - ansible-playbook -i hosts.ini --private-key id_rsa 03-join-swarm-nodes.yml
+  only:
+    - master
+  needs:
+    - initialize:swarm
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always
+
+build:images:
   stage: build
   before_script:
     - echo "$GITLAB_REGISTRY_PASSWORD" | docker login gitlab.icarostangent.lab:5050 -u $GITLAB_REGISTRY_USERNAME --password-stdin
   script:
-    - docker compose -f docker-compose.build.yml pull
     - docker compose -f docker-compose.build.yml build
     - docker compose -f docker-compose.build.yml push
     - docker system prune -f
@@ -95,19 +162,25 @@ build:production:
   tags:
     - docker
 
-deploy:production:
-  stage: deploy
+deploy:application:
+  stage: deploy-application
   environment:
-    name: prod
+    name: production
+  before_script:
+    # Install Python and pip if not available
+    - apt-get update && apt-get install -y python3 python3-pip
+    # Install Ansible
+    - pip3 install ansible
+    # Install required Ansible collections
+    - ansible-galaxy collection install community.general
   script:
     - echo "$SSH_PRIVATE_KEY" | base64 -d > id_rsa
     - chmod 600 id_rsa
     - |
-      ansible-playbook -i hosts.ini --private-key id_rsa deploy-application.yml \
-        -e "ansible_become_password=$ROOT_PASSWORD" \
+      ansible-playbook -i hosts.ini --private-key id_rsa 04-deploy-application.yml \
+        -e "postgres_password=$POSTGRES_PASSWORD" \
         -e "django_db_password=$DJANGO_DB_PASSWORD" \
         -e "django_secret_key=$DJANGO_SECRET_KEY" \
-        -e "postgres_password=$POSTGRES_PASSWORD" \
         -e "fauxdan_ssh_private_key=$FAUXDAN_SSH_PRIVATE_KEY" \
         -e "fauxdan_ssh_public_key=$FAUXDAN_SSH_PUBLIC_KEY" \
         -e "gitlab_registry_username=$GITLAB_REGISTRY_USERNAME" \
@@ -115,5 +188,9 @@ deploy:production:
   only:
     - master
   needs:
-    - provision
-    - build:production
+    - join:nodes
+    - build:images
+  artifacts:
+    reports:
+      junit: ansible-results.xml
+    when: always

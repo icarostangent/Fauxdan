@@ -64,6 +64,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'backend.logging_middleware.RequestLoggingMiddleware',
     'analytics.middleware.AnalyticsMiddleware',
     'metrics.metrics.MetricsMiddleware',
     'metrics.metrics.DatabaseMetricsMiddleware',
@@ -105,21 +106,8 @@ DATABASES = {
 }
 
 # Logging Configuration
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'analytics': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-        },
-    },
-}
+from .logging_config import get_logging_config
+LOGGING = get_logging_config()
 
 
 # Password validation
@@ -190,6 +178,7 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         'https://fauxdan.io',
         'https://admin.fauxdan.io',
+        'https://fauxdan-admin.icarostangent.lab:8443',
     ]
 
 REST_FRAMEWORK = {

@@ -1,0 +1,24 @@
+# this file is primarily used to exclude files from the caddy build process
+
+# Large directories to exclude
+frontend/node_modules/
+staticfiles/
+logs/
+.git/
+*.md
+.env*
+
+# Build artifacts
+backend/masscan/output/
+celerybeat-schedule
+paused.conf
+
+# Development files
+*.log
+.DS_Store
+Thumbs.db
+
+backend/
+db/
+monitoring/
+redis/

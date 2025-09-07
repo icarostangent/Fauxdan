@@ -1,0 +1,274 @@
+---
+- name: Deploy Fauxdan Application Stack to Docker Swarm
+  hosts: swarm-master
+  become: yes
+  vars:
+    workspace_dir: /opt/fauxdan
+    git_repo: "ssh://git@gitlab.icarostangent.lab:2222/josh/fauxdan.git"
+    git_branch: master
+    stack_name: "fauxdan"
+    compose_file: "docker-compose.swarm.yml"
+    
+  tasks:
+    # Setup SSH keys for Git access
+    - name: Check if ~/.ssh directory exists
+      stat:
+        path: ~/.ssh
+      register: ssh_dir_stat
+
+    - name: Create SSH directory if it doesn't exist
+      file:
+        path: ~/.ssh
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+      when: not ssh_dir_stat.stat.exists
+      
+    - name: Check if SSH private key exists
+      stat:
+        path: ~/.ssh/id_rsa
+      register: ssh_key_stat
+      when: ssh_dir_stat.stat.exists
+
+    - name: Create SSH keys if they don't exist
+      shell: |
+        echo "{{ fauxdan_ssh_private_key }}" | base64 -d > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        echo "{{ fauxdan_ssh_public_key }}" > ~/.ssh/id_rsa.pub
+        chmod 644 ~/.ssh/id_rsa.pub
+      when: not ssh_key_stat.stat.exists
+
+    # Ensure git is installed
+    - name: Ensure git is installed
+      package:
+        name: git
+        state: present
+
+    # Clone/update repository
+    - name: Create workspace directory
+      file:
+        path: "{{ workspace_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Check if repository exists
+      stat:
+        path: "{{ workspace_dir }}/.git"
+      register: git_repo_exists
+
+    - name: Clone repository if it doesn't exist
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ workspace_dir }}"
+        version: "{{ git_branch }}"
+        depth: 1
+        accept_hostkey: yes
+      when: not git_repo_exists.stat.exists
+      register: git_clone_result
+
+    - name: Update repository if it exists
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ workspace_dir }}"
+        version: "{{ git_branch }}"
+        accept_hostkey: yes
+        force: yes
+      when: git_repo_exists.stat.exists
+      register: git_pull_result
+
+    # Create environment file
+    - name: Check if .env is present
+      stat:
+        path: "{{ workspace_dir }}/.env"
+      register: env_file_exists
+
+    - name: Create .env file from variables
+      template:
+        src: "./env.template"
+        dest: "{{ workspace_dir }}/.env"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        DJANGO_DB_PASSWORD: "{{ django_db_password }}"
+        DJANGO_SECRET_KEY: "{{ django_secret_key }}"
+        GITLAB_REGISTRY_USERNAME: "{{ gitlab_registry_username }}"
+        GITLAB_REGISTRY_PASSWORD: "{{ gitlab_registry_password }}"
+      when: not env_file_exists.stat.exists
+
+    # Login to GitLab Container Registry
+    - name: Login to GitLab Container Registry
+      shell: |
+        echo "{{ gitlab_registry_password }}" | docker login gitlab.icarostangent.lab:5050 -u "{{ gitlab_registry_username }}" --password-stdin
+      register: docker_login_result
+      changed_when: false
+
+    # Pull latest images
+    - name: Pull latest Docker images
+      shell: |
+        cd {{ workspace_dir }}
+        docker compose -f {{ compose_file }} --env-file .env pull
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: docker_pull_result
+
+    # Deploy stack to swarm
+    - name: Deploy application stack to swarm
+      shell: |
+        cd {{ workspace_dir }}
+        docker stack deploy -c {{ compose_file }} --with-registry-auth {{ stack_name }}
+      args:
+        chdir: "{{ workspace_dir }}"
+      register: stack_deploy_result
+
+    # Wait for services to be ready
+    - name: Wait for services to be ready
+      wait_for:
+        timeout: 300
+      when: stack_deploy_result is defined
+
+    # Check stack status
+    - name: Check stack status
+      command: docker stack ls
+      register: stack_status
+
+    - name: Check service status
+      command: docker service ls
+      register: service_status
+
+    - name: Check service replicas
+      command: docker service ps {{ stack_name }}_backend
+      register: backend_status
+      failed_when: false
+
+    - name: Check service replicas
+      command: docker service ps {{ stack_name }}_frontend
+      register: frontend_status
+      failed_when: false
+
+    # Display deployment results
+    - name: Display deployment results
+      debug:
+        msg:
+          - "=== Application Deployment Complete ==="
+          - "Stack: {{ stack_name }}"
+          - "Compose file: {{ compose_file }}"
+          - "Repository: {{ git_repo }}"
+          - "Branch: {{ git_branch }}"
+          - ""
+          - "Stack Status:"
+          - "{{ stack_status.stdout_lines | join('\n') }}"
+          - ""
+          - "Service Status:"
+          - "{{ service_status.stdout_lines | join('\n') }}"
+
+    # Health checks
+    - name: Wait for services to be healthy
+      wait_for:
+        timeout: 300
+      when: service_status is defined
+
+    - name: Check service health
+      command: docker service inspect {{ stack_name }}_backend --format "{{ '{{.Spec.TaskTemplate.RestartPolicy.Condition}}' }}"
+      register: backend_health
+      failed_when: false
+
+    - name: Check service logs
+      command: docker service logs {{ stack_name }}_backend --tail 10
+      register: backend_logs
+      failed_when: false
+
+    - name: Display service health
+      debug:
+        msg:
+          - "=== Service Health Check ==="
+          - "Backend Health: {{ backend_health.stdout }}"
+          - "Backend Logs (last 10 lines):"
+          - "{{ backend_logs.stdout_lines | join('\n') }}"
+
+    # Create management script for stack operations
+    - name: Create stack management script
+      copy:
+        content: |
+          #!/bin/bash
+          # Docker Stack Management Script
+          
+          STACK_NAME="{{ stack_name }}"
+          COMPOSE_FILE="{{ compose_file }}"
+          WORKSPACE_DIR="{{ workspace_dir }}"
+          
+          case "$1" in
+            status)
+              echo "=== Stack Status ==="
+              docker stack ls
+              echo ""
+              echo "=== Service Status ==="
+              docker service ls
+              echo ""
+              echo "=== Service Details ==="
+              docker service ps $STACK_NAME_backend
+              docker service ps $STACK_NAME_frontend
+              ;;
+            logs)
+              if [ -z "$2" ]; then
+                echo "Usage: $0 logs <service_name>"
+                echo "Available services:"
+                docker service ls --format "{{ '{{.Name}}' }}"
+                exit 1
+              fi
+              docker service logs $STACK_NAME_$2
+              ;;
+            scale)
+              if [ -z "$2" ] || [ -z "$3" ]; then
+                echo "Usage: $0 scale <service_name> <replicas>"
+                exit 1
+              fi
+              docker service scale $STACK_NAME_$2=$3
+              ;;
+            update)
+              echo "Updating stack..."
+              cd $WORKSPACE_DIR
+              docker stack deploy -c $COMPOSE_FILE --with-registry-auth $STACK_NAME
+              ;;
+            remove)
+              echo "Removing stack..."
+              docker stack rm $STACK_NAME
+              ;;
+            *)
+              echo "Docker Stack Management Script"
+              echo "Usage: $0 {status|logs|scale|update|remove}"
+              echo ""
+              echo "Commands:"
+              echo "  status     - Show stack and service status"
+              echo "  logs       - Show service logs"
+              echo "  scale      - Scale a service"
+              echo "  update     - Update the stack"
+              echo "  remove     - Remove the stack"
+              exit 1
+              ;;
+          esac
+        dest: /usr/local/bin/stack-mgmt
+        mode: '0755'
+
+    # Final deployment summary
+    - name: Final deployment summary
+      debug:
+        msg:
+          - "=== Final Deployment Summary ==="
+          - "Stack Name: {{ stack_name }}"
+          - "Services Deployed: {{ service_status.stdout_lines | length - 1 }}"
+          - "Management Commands:"
+          - "  stack-mgmt status    - Show stack status"
+          - "  stack-mgmt logs      - Show service logs"
+          - "  stack-mgmt scale     - Scale services"
+          - "  stack-mgmt update    - Update stack"
+          - "  stack-mgmt remove    - Remove stack"
+          - ""
+          - "Swarm Management:"
+          - "  swarm-mgmt status    - Show swarm status"
+          - "  swarm-mgmt nodes     - List nodes"
+          - "  swarm-mgmt services  - List services"

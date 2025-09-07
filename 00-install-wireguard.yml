@@ -1,0 +1,203 @@
+---
+- name: Install and Configure WireGuard VPN
+  hosts: swarm-edge
+  become: yes
+  vars:
+    wireguard_interface: "wg0"
+    wireguard_port: 51820
+    wireguard_network: "10.10.10.0/24"
+    wireguard_user: "{{ ansible_user }}"
+    # Edge node keys - these should be set in GitLab CI variables
+    edge_private_key: "{{ edge_private_key }}"
+    edge_public_key: "{{ edge_public_key }}"
+    # Edge peer configuration - these should be set in GitLab CI variables
+    edge_peer_public_key: "{{ edge_peer_public_key }}"
+    edge_peer_endpoint: "{{ edge_peer_endpoint }}"
+    
+  tasks:
+    # Update system packages
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+
+    # Install WireGuard
+    - name: Install WireGuard
+      apt:
+        name:
+          - wireguard
+          - wireguard-tools
+          - qrencode
+        state: present
+
+    # Create WireGuard configuration directory
+    - name: Create WireGuard configuration directory
+      file:
+        path: /etc/wireguard
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    # Validate that required keys are provided
+    - name: Validate WireGuard keys are provided
+      fail:
+        msg: "WireGuard keys must be provided via GitLab CI variables: edge_private_key and edge_public_key"
+      when: edge_private_key == '' or edge_public_key
+
+    - name: Validate peer configuration is provided
+      fail:
+        msg: "WireGuard peer configuration must be provided via GitLab CI variables: edge_peer_public_key and edge_peer_endpoint"
+      when: edge_peer_public_key == '' or edge_peer_endpoint == ''
+
+    # Validate that wireguard_ip is provided for each host
+    - name: Validate WireGuard IP is provided
+      fail:
+        msg: "WireGuard IP must be provided for host {{ inventory_hostname }}. Add 'wireguard_ip=X.X.X.X' to your inventory file."
+      when: wireguard_ip is not defined or wireguard_ip == ''
+
+    # Create WireGuard configuration for edge nodes
+    - name: Create WireGuard configuration for edge nodes
+      copy:
+        content: |
+          [Interface]
+          PrivateKey = {{ edge_private_key }}
+          Address = {{ wireguard_ip }}/32
+          DNS = 10.10.10.1
+          
+          [Peer]
+          PublicKey = {{ edge_peer_public_key }}
+          AllowedIPs = 10.10.10.0/24, 192.168.1.0/24
+          Endpoint = fartmingle.com:51820
+          PersistentKeepalive = 25
+
+        dest: /etc/wireguard/{{ wireguard_interface }}.conf
+        mode: '0600'
+        owner: root
+        group: root
+
+    # Configure firewall for WireGuard
+    - name: Allow WireGuard port
+      ufw:
+        rule: allow
+        port: "{{ wireguard_port }}"
+        proto: udp
+
+    # Enable IP forwarding
+    - name: Enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        reload: yes
+
+    - name: Make IP forwarding persistent
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: 'net.ipv4.ip_forward = 1'
+        state: present
+
+    # Start and enable WireGuard
+    - name: Start and enable WireGuard service
+      systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    # Wait for WireGuard to start
+    - name: Wait for WireGuard interface to be up
+      wait_for:
+        timeout: 30
+
+    # Create WireGuard management script
+    - name: Create WireGuard management script
+      copy:
+        content: |
+          #!/bin/bash
+          # WireGuard Management Script
+          
+          INTERFACE="{{ wireguard_interface }}"
+          CONFIG_FILE="/etc/wireguard/$INTERFACE.conf"
+          
+          case "$1" in
+            status)
+              echo "=== WireGuard Status ==="
+              wg show
+              echo ""
+              echo "=== Interface Status ==="
+              ip addr show $INTERFACE
+              ;;
+            start)
+              echo "Starting WireGuard..."
+              systemctl start wg-quick@$INTERFACE
+              ;;
+            stop)
+              echo "Stopping WireGuard..."
+              systemctl stop wg-quick@$INTERFACE
+              ;;
+            restart)
+              echo "Restarting WireGuard..."
+              systemctl restart wg-quick@$INTERFACE
+              ;;
+            reload)
+              echo "Reloading WireGuard configuration..."
+              wg syncconf $INTERFACE $CONFIG_FILE
+              ;;
+            config)
+              echo "WireGuard Configuration:"
+              cat $CONFIG_FILE
+              ;;
+            *)
+              echo "WireGuard Management Script"
+              echo "Usage: $0 {status|start|stop|restart|reload|config}"
+              echo ""
+              echo "Commands:"
+              echo "  status     - Show WireGuard status"
+              echo "  start      - Start WireGuard"
+              echo "  stop       - Stop WireGuard"
+              echo "  restart    - Restart WireGuard"
+              echo "  reload     - Reload configuration"
+              echo "  config     - Show configuration"
+              exit 1
+              ;;
+          esac
+        dest: /usr/local/bin/wg-mgmt
+        mode: '0755'
+
+    # Verify WireGuard installation
+    - name: Verify WireGuard installation
+      command: wg --version
+      register: wg_version
+      changed_when: false
+
+    - name: Check WireGuard interface status
+      command: ip addr show {{ wireguard_interface }}
+      register: wg_interface_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display WireGuard installation summary
+      debug:
+        msg:
+          - "=== WireGuard Installation Complete (Edge Node) ==="
+          - "Host: {{ inventory_hostname }}"
+          - "Group: {{ group_names }}"
+          - "WireGuard version: {{ wg_version.stdout }}"
+          - "Interface: {{ wireguard_interface }}"
+          - "Port: {{ wireguard_port }}"
+          - "Network: {{ wireguard_network }}"
+          - "Client IP: {{ wireguard_ip }}"
+          - "Public Key: {{ edge_public_key }}"
+          - "Edge Peer Endpoint: {{ edge_peer_endpoint }}"
+          - ""
+          - "Management commands:"
+          - "  wg-mgmt status    - Show WireGuard status"
+          - "  wg-mgmt start     - Start WireGuard"
+          - "  wg-mgmt stop      - Stop WireGuard"
+          - "  wg-mgmt restart   - Restart WireGuard"
+          - "  wg-mgmt config    - Show configuration"

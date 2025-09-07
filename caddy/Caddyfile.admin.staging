@@ -1,20 +1,8 @@
-{
-    # Development configuration for admin panel
-    debug
-    admin off
-    local_certs
-    # Allow self-signed certs for development
-    skip_install_trust
-}
-
-
-
-# HTTPS server for admin panel (port 8443)
-localhost:8443 {
-    # Force self-signed certificate
+# Staging admin panel configuration
+-admin.staging.icarostangent.lab:8443 {
+    # Enable TLS with self-signed certificate
     tls internal
-
-    # Route Django admin to backend-admin service
+    # Handle Django admin requests
     handle /admin {
         reverse_proxy backend-admin:8000
     }
@@ -43,42 +31,7 @@ localhost:8443 {
         reverse_proxy prometheus:9090
     }
 
-    # Route Elasticsearch to the elasticsearch service
-    handle /elasticsearch {
-        uri strip_prefix /elasticsearch
-        reverse_proxy elasticsearch:9200
-    }
-    
-    handle /elasticsearch/* {
-        uri strip_prefix /elasticsearch
-        reverse_proxy elasticsearch:9200
-    }
-
-    # Route Kibana to the kibana service
-    handle /kibana {
-        reverse_proxy kibana:5601
-    }
-    
-    handle /kibana/* {
-        reverse_proxy kibana:5601
-    }
-
-    # Route Logstash monitoring to the logstash service
-    handle /logstash {
-        uri strip_prefix /logstash
-        reverse_proxy logstash:9600
-    }
-    
-    handle /logstash/* {
-        uri strip_prefix /logstash
-        reverse_proxy logstash:9600
-    }
-
-    # Handle Prometheus API endpoints (must come before other routes)
-    handle /api/v1/* {
-        reverse_proxy prometheus:9090
-    }
-    
+    # Handle Prometheus redirects (like /query)
     handle /query {
         reverse_proxy prometheus:9090
     }
@@ -114,10 +67,10 @@ localhost:8443 {
         reverse_proxy backend-admin:8000
     }
 
-    # Detailed development logging
+    # Enable logging
     log {
         output stdout
         format console
-        level DEBUG
+        level INFO
     }
 }

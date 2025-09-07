@@ -32,10 +32,10 @@ localhost, dev2.icarostangent.lab {
         reverse_proxy frontend:3000
     }
 
-    # Detailed development logging
+    # Structured JSON logging for ELK stack
     log {
         output stdout
-        format console
-        level DEBUG
+        format json
+        level INFO
     }
 }

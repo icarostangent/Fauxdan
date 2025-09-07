@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # Edge Services - Deploy to edge nodes only
+  caddy:
+    image: caddy:2-alpine
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-edge
+          - node.labels.role == edge
+          - node.labels.ssl.termination == true
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - frontend
+    configs:
+      - caddy_config
+
+  frontend:
+    image: nginx:alpine
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-edge
+          - node.labels.workload.type == frontend
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - frontend
+
+  # Worker Services - Deploy to worker nodes only
+  backend:
+    image: django:latest
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-worker
+          - node.labels.role == worker
+          - node.labels.workload.type == backend
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/db
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - postgres
+      - redis
+
+  scanner:
+    image: masscan:latest
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-worker
+          - node.labels.scaling.enabled == true
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    networks:
+      - backend
+    privileged: true
+
+  redis:
+    image: redis:alpine
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-worker
+          - node.labels.role == worker
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - backend
+
+  monitoring:
+    image: prometheus:latest
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-worker
+          - node.labels.monitoring.enabled == true
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - backend
+
+  # Storage Services - Deploy to storage nodes only
+  postgres:
+    image: postgres:13
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-storage
+          - node.labels.role == storage
+          - node.labels.workload.type == database
+          - node.labels.storage.type == persistent
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    environment:
+      - POSTGRES_DB=fauxdan
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  elasticsearch:
+    image: elasticsearch:7.14.0
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-storage
+          - node.labels.data.critical == true
+          - node.labels.backup.enabled == true
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - backend
+
+  # Backup Service - Deploy to storage nodes
+  backup:
+    image: postgres:13
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.node.type == swarm-storage
+          - node.labels.backup.enabled == true
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    command: >
+      sh -c "
+      while true; do
+        pg_dump -h postgres -U user fauxdan > /backup/backup-$(date +%Y%m%d-%H%M%S).sql
+        find /backup -name 'backup-*.sql' -mtime +7 -delete
+        sleep 86400
+      done
+      "
+    volumes:
+      - backup_data:/backup
+    networks:
+      - backend
+
+networks:
+  frontend:
+    driver: overlay
+    attachable: true
+  backend:
+    driver: overlay
+    internal: true
+
+volumes:
+  postgres_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  backup_data:
+    driver: local
+
+configs:
+  caddy_config:
+    external: true
