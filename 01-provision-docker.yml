@@ -1,0 +1,218 @@
+---
+- name: Provision Docker on All Nodes
+  hosts: all
+  become: yes
+  vars:
+    docker_user: "{{ ansible_user }}"
+    docker_version: "5:24.0.*"
+    
+  tasks:
+    # Update system packages
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        
+    # Install required system packages
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+          - ufw
+          - htop
+          - vim
+          - jq
+        state: present
+
+    # Docker installation
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker GPG key
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      args:
+        creates: /etc/apt/keyrings/docker.asc
+
+    - name: Set read permissions for Docker GPG key
+      file:
+        path: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      shell: |
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Update apt cache after adding Docker repository
+      apt:
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce={{ docker_version }}
+          - docker-ce-cli={{ docker_version }}
+          - containerd.io
+          - docker-compose-plugin
+          - docker-buildx-plugin
+        state: present
+
+    # Docker configuration
+    - name: Create docker group
+      group:
+        name: docker
+        state: present
+
+    - name: Add user to docker group
+      user:
+        name: "{{ docker_user }}"
+        groups: docker
+        append: yes
+
+    # Configure Docker daemon
+    - name: Create Docker daemon configuration directory
+      file:
+        path: /etc/docker
+        state: directory
+        mode: '0755'
+
+    - name: Configure Docker daemon
+      copy:
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "live-restore": true,
+            "userland-proxy": false,
+            "experimental": false,
+            "metrics-addr": "0.0.0.0:9323",
+            "default-address-pools": [
+              {
+                "base": "172.17.0.0/12",
+                "size": 24
+              }
+            ],
+            "storage-driver": "overlay2"
+          }
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      notify: restart docker
+
+    # GitLab Registry Configuration
+    - name: Create Docker certs directory
+      file:
+        path: /etc/docker/certs.d/gitlab.icarostangent.lab:5050
+        state: directory
+        mode: '0755'
+
+    - name: Download GitLab certificate
+      shell: |
+        echo -n | openssl s_client -connect gitlab.icarostangent.lab:5050 -servername gitlab.icarostangent.lab | \
+        sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > /etc/docker/certs.d/gitlab.icarostangent.lab:5050/ca.crt
+      args:
+        creates: /etc/docker/certs.d/gitlab.icarostangent.lab:5050/ca.crt
+
+    # Start and enable Docker service
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Configure firewall for Docker
+    - name: Reset UFW to defaults
+      ufw:
+        state: reset
+
+    - name: Set UFW default policies
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Allow Docker Swarm management port
+      ufw:
+        rule: allow
+        port: '2377'
+        proto: tcp
+
+    - name: Allow Docker Swarm overlay network
+      ufw:
+        rule: allow
+        port: '7946'
+        proto: tcp
+
+    - name: Allow Docker Swarm overlay network UDP
+      ufw:
+        rule: allow
+        port: '7946'
+        proto: udp
+
+    - name: Allow Docker Swarm ingress network
+      ufw:
+        rule: allow
+        port: '4789'
+        proto: udp
+
+    - name: Allow Docker metrics port
+      ufw:
+        rule: allow
+        port: '9323'
+        proto: tcp
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+    # Verify installations
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Verify Docker Compose installation
+      command: docker compose version
+      register: compose_version
+      changed_when: false
+
+    - name: Display installation summary
+      debug:
+        msg:
+          - "=== Docker Installation Complete ==="
+          - "Host: {{ inventory_hostname }}"
+          - "Docker version: {{ docker_version.stdout }}"
+          - "Docker Compose version: {{ compose_version.stdout }}"
+          - "User {{ docker_user }} added to docker group"
+
+  handlers:
+    - name: restart docker
+      service:
+        name: docker
+        state: restarted
