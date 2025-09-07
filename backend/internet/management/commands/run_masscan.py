@@ -54,6 +54,11 @@ class Command(BaseCommand):
             action='store_true', 
             help='Resume paused scan'
         )
+        parser.add_argument(
+            '--rate',
+            type=int,
+            help='Scan rate in packets per second (e.g. 1000)'
+        )
 
     def handle(self, *args, **kwargs):
         if not kwargs['target']:
@@ -67,6 +72,7 @@ class Command(BaseCommand):
         self.udp = kwargs['udp']
         self.use_proxychains = kwargs['use_proxychains']
         self.resume = kwargs['resume']
+        self.rate = kwargs['rate']
 
         self.masscan.set_target(self.target)
         if self.syn:
@@ -79,6 +85,9 @@ class Command(BaseCommand):
             self.proxychains.set_config()
         if self.resume:
             self.masscan.set_resume()
+        
+        if self.rate:
+            self.masscan.set_rate(self.rate)
         
         if self.ports:
             print(self.ports)

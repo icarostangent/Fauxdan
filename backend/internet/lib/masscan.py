@@ -14,6 +14,7 @@ class MasscanConfigurator:
         self.wait = '0'
         self.rate = settings.MASSCAN_RATE
         self.exclude_file = 'masscan/exclude.conf'
+        self.resume = False
         # self.rotate = '30'
         # self.rotate_dir = 'masscan/output/'
         # self.output_format = 'json'
@@ -113,6 +114,12 @@ class MasscanConfigurator:
     def set_output_filename(self, filename):
         self.output_filename = filename
     
+    def set_resume(self, enabled=True):
+        """Enable or disable resume functionality for masscan"""
+        # This would typically set a resume file or flag
+        # For now, we'll just store the state
+        self.resume = enabled
+    
     def get_cmd(self):
         cmd = [self.masscan_path]
 
@@ -137,6 +144,9 @@ class MasscanConfigurator:
         cmd.extend(['--wait', str(self.wait)])
         cmd.extend(['--rate', str(self.rate)])
         cmd.extend(['--exclude-file', self.exclude_file])
+        
+        if self.resume:
+            cmd.append('--resume')
         # cmd.extend(['--rotate', self.rotate])
         # cmd.extend(['--rotate-dir', self.rotate_dir])
         # cmd.extend(['--output-format', self.output_format])
