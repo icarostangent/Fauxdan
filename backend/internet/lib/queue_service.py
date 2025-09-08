@@ -99,15 +99,22 @@ class QueueService:
         await sync_to_async(_update)()
     
     async def _job_processor_loop(self):
-        """Main loop for processing jobs"""
+        """Main loop for processing jobs (both ScannerJob and AncillaryJob)"""
         while self.running:
             try:
                 # Check if we can accept more jobs
                 if len(self.current_jobs) < self.worker.max_concurrent_jobs:
-                    job = await self._get_next_job()
-                    if job:
-                        # Process job asynchronously
-                        asyncio.create_task(self._process_job(job))
+                    # Try to get a scanner job first
+                    scanner_job = await self._get_next_job()
+                    if scanner_job:
+                        # Process scanner job asynchronously
+                        asyncio.create_task(self._process_job(scanner_job))
+                    else:
+                        # If no scanner job, try to get an ancillary job
+                        ancillary_job = await self._get_next_ancillary_job()
+                        if ancillary_job:
+                            # Process ancillary job asynchronously
+                            asyncio.create_task(self._process_ancillary_job(ancillary_job))
                 
                 await asyncio.sleep(1)  # Check for jobs every second
             except Exception as e:
@@ -152,6 +159,36 @@ class QueueService:
             return None
         
         return await sync_to_async(_get_job)()
+    
+    async def _get_next_ancillary_job(self) -> Optional['AncillaryJob']:
+        """Get the next available ancillary job"""
+        from asgiref.sync import sync_to_async
+        from internet.models import AncillaryJob
+        
+        def _get_ancillary_job():
+            # Get the next pending ancillary job that matches our supported job types
+            # Filter by job types that are supported by this worker
+            supported_ancillary_types = [jt for jt in self.worker.supported_job_types 
+                                       if jt in ['banner_grab', 'ssl_cert', 'domain_enum', 'service_detection', 'vulnerability_scan']]
+            
+            if not supported_ancillary_types:
+                return None
+                
+            job = AncillaryJob.objects.filter(
+                status='pending',
+                job_type__in=supported_ancillary_types
+            ).order_by('-priority', 'created_at').first()
+            
+            if job:
+                # Assign job to this worker
+                job.assigned_worker = self.worker
+                job.status = 'running'
+                job.save()
+                return job
+            
+            return None
+        
+        return await sync_to_async(_get_ancillary_job)()
     
     async def _process_job(self, job: ScannerJob):
         """Process a single job"""
@@ -396,9 +433,11 @@ class QueueService:
         """Process a single ancillary job (banner grab, domain enum, SSL cert, etc.)"""
         from asgiref.sync import sync_to_async
         
+        job_id = f"ancillary_{job.job_uuid}"
+        self.current_jobs[job_id] = job
+        
         try:
-            # Mark job as started
-            await sync_to_async(job.mark_started)()
+            logger.info(f"Processing ancillary job {job_id}: {job.job_type} - {job.host_ip}:{job.port_number}")
             
             # Process based on job type
             if job.job_type == 'banner_grab':
@@ -413,12 +452,15 @@ class QueueService:
             
             # Mark job as completed
             await sync_to_async(job.mark_completed)(result_data)
-            logger.info(f'Completed {job.job_type} job for {job.host_ip}')
-                
+            logger.info(f"Completed ancillary job {job_id}")
+            
         except Exception as e:
-            error_msg = str(e)
-            await sync_to_async(job.mark_failed)(error_msg)
-            logger.error(f'{job.job_type} job failed for {job.host_ip}: {error_msg}')
+            logger.error(f"Ancillary job {job_id} failed: {e}")
+            await sync_to_async(job.mark_failed)(str(e))
+        finally:
+            # Clean up
+            if job_id in self.current_jobs:
+                del self.current_jobs[job_id]
     
     async def _process_banner_grab(self, job: 'AncillaryJob') -> dict:
         """Process banner grab job"""
@@ -520,34 +562,6 @@ class QueueService:
         
         return result_data
     
-    async def process_ancillary_jobs(self, max_jobs: int = 10):
-        """Process pending ancillary jobs (banner grab, domain enum, SSL cert, etc.)"""
-        from asgiref.sync import sync_to_async
-        from internet.models import AncillaryJob
-        
-        def get_pending_jobs():
-            return list(AncillaryJob.objects.filter(
-                status='pending'
-            ).order_by('-priority', 'created_at')[:max_jobs])
-        
-        # Get pending jobs
-        pending_jobs = await sync_to_async(get_pending_jobs)()
-        
-        if not pending_jobs:
-            return
-        
-        logger.info(f"Processing {len(pending_jobs)} ancillary jobs...")
-        
-        # Process jobs concurrently
-        tasks = []
-        for job in pending_jobs:
-            task = self._process_ancillary_job(job)
-            tasks.append(task)
-        
-        # Wait for all jobs to complete
-        await asyncio.gather(*tasks, return_exceptions=True)
-        
-        logger.info(f"Completed processing {len(pending_jobs)} ancillary jobs.")
     
     async def _process_nmap_job(self, job: ScannerJob):
         """Process an nmap job (placeholder)"""

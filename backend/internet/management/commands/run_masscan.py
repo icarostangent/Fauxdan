@@ -1,3 +1,6 @@
+"""
+Unified management command for masscan that can run directly or queue jobs
+"""
 import asyncio
 import aioredis
 import re
@@ -8,19 +11,24 @@ from django.utils import timezone
 from internet.models import Scan, Port, Host
 from internet.lib.proxychains import ProxyChainsConfigurator
 from internet.lib.masscan import MasscanConfigurator
+from internet.lib.queue_service import QueueManager
 from asgiref.sync import sync_to_async
 
+
 class Command(BaseCommand):
-    help = 'Run masscan'
+    help = 'Masscan command that can run directly or queue jobs for processing by the scanner service'
+    
     def __init__(self):
         super().__init__()
         self.masscan = MasscanConfigurator()
         self.proxychains = ProxyChainsConfigurator()
 
     def add_arguments(self, parser):
+        # Target and basic options
         parser.add_argument(
             '--target', 
             type=str, 
+            required=True,
             help='Target IP address or range'
         )
         parser.add_argument(
@@ -29,6 +37,8 @@ class Command(BaseCommand):
             default=[],
             help='Comma-separated ports to scan (e.g. "80,443,8080")'
         )
+        
+        # Scan type options
         parser.add_argument(
             '--syn', 
             action='store_true', 
@@ -54,6 +64,8 @@ class Command(BaseCommand):
             action='store_true', 
             help='Resume paused scan'
         )
+        
+        # Performance options
         parser.add_argument(
             '--rate',
             type=int,
@@ -65,41 +77,167 @@ class Command(BaseCommand):
             default=3600,  # 1 hour default timeout
             help='Maximum scan duration in seconds (default: 3600)'
         )
+        
+        # Execution mode
+        parser.add_argument(
+            '--queue',
+            action='store_true',
+            help='Queue the job for processing by the scanner service instead of running directly'
+        )
+        
+        # Queue options (only used when --queue is specified)
+        parser.add_argument(
+            '--queue-name',
+            type=str,
+            default='default',
+            help='Queue name (default: default) - only used with --queue'
+        )
+        parser.add_argument(
+            '--priority',
+            type=int,
+            default=0,
+            help='Job priority (higher number = higher priority) - only used with --queue'
+        )
+        parser.add_argument(
+            '--schedule',
+            type=str,
+            help='Schedule for later execution (ISO format: YYYY-MM-DDTHH:MM:SS) - only used with --queue'
+        )
+        parser.add_argument(
+            '--user',
+            type=int,
+            help='User ID to associate with the job - only used with --queue'
+        )
 
     def handle(self, *args, **kwargs):
-        if not kwargs['target']:
-            self.stdout.write(self.style.ERROR('Error: --target is required'))
-            return
+        target = kwargs['target']
+        ports = kwargs['ports']
+        syn = kwargs['syn']
+        tcp = kwargs['tcp']
+        udp = kwargs['udp']
+        use_proxychains = kwargs['use_proxychains']
+        resume = kwargs['resume']
+        rate = kwargs['rate']
+        timeout = kwargs['timeout']
+        queue_mode = kwargs['queue']
+        queue_name = kwargs['queue_name']
+        priority = kwargs['priority']
+        schedule = kwargs['schedule']
+        user_id = kwargs['user']
 
-        self.target = kwargs['target']
-        self.ports = kwargs['ports']
-        self.syn = kwargs['syn']
-        self.tcp = kwargs['tcp']
-        self.udp = kwargs['udp']
-        self.use_proxychains = kwargs['use_proxychains']
-        self.resume = kwargs['resume']
-        self.rate = kwargs['rate']
-        self.timeout = kwargs['timeout']
+        if queue_mode:
+            self._handle_queued_mode(
+                target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout,
+                queue_name, priority, schedule, user_id
+            )
+        else:
+            self._handle_direct_mode(
+                target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout
+            )
 
-        self.masscan.set_target(self.target)
-        if self.syn:
+    def _handle_queued_mode(self, target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout,
+                           queue_name, priority, schedule, user_id):
+        """Handle queued execution mode"""
+        # Build scan options
+        scan_options = {}
+        if syn:
+            scan_options['syn'] = True
+        if tcp:
+            scan_options['tcp'] = True
+        if udp:
+            scan_options['udp'] = True
+        if use_proxychains:
+            scan_options['use_proxychains'] = True
+        if rate:
+            scan_options['rate'] = rate
+        if resume:
+            scan_options['resume'] = True
+        scan_options['timeout'] = timeout
+
+        # Parse scheduled time
+        scheduled_for = None
+        if schedule:
+            try:
+                scheduled_for = datetime.fromisoformat(schedule)
+            except ValueError:
+                self.stdout.write(
+                    self.style.ERROR('Invalid schedule format. Use ISO format (YYYY-MM-DDTHH:MM:SS)')
+                )
+                return
+
+        # Get user if specified
+        user = None
+        if user_id:
+            from django.contrib.auth.models import User
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                self.stdout.write(
+                    self.style.ERROR(f'User with ID {user_id} not found')
+                )
+                return
+
+        # Create the job
+        try:
+            job = QueueManager.create_job(
+                job_type='masscan',
+                target=target,
+                queue_name=queue_name,
+                ports=ports,
+                scan_options=scan_options,
+                priority=priority,
+                user=user,
+                scheduled_for=scheduled_for
+            )
+            
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'Successfully queued masscan job:\n'
+                    f'  Job UUID: {job.job_uuid}\n'
+                    f'  Target: {target}\n'
+                    f'  Ports: {ports if ports else "default"}\n'
+                    f'  Queue: {queue_name}\n'
+                    f'  Priority: {priority}\n'
+                    f'  Status: {job.status}\n'
+                    f'  Scheduled: {scheduled_for or "immediately"}'
+                )
+            )
+            
+            # Show how to check status
+            self.stdout.write(
+                f'\nTo check job status, run:\n'
+                f'  python manage.py queue_manager status {job.job_uuid}\n\n'
+                f'To list all jobs, run:\n'
+                f'  python manage.py queue_manager list'
+            )
+            
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(f'Failed to queue job: {str(e)}')
+            )
+
+    def _handle_direct_mode(self, target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout):
+        """Handle direct execution mode"""
+        # Configure masscan
+        self.masscan.set_target(target)
+        if syn:
             self.masscan.set_syn()
-        if self.tcp:
+        if tcp:
             self.masscan.set_tcp()
-        if self.udp:
+        if udp:
             self.masscan.set_udp()
-        if self.use_proxychains:
+        if use_proxychains:
             self.proxychains.set_config()
-        if self.resume:
+        if resume:
             self.masscan.set_resume()
         
-        if self.rate:
-            self.masscan.set_rate(self.rate)
+        if rate:
+            self.masscan.set_rate(rate)
         
-        if self.ports:
-            print(self.ports)
-            self.masscan.set_ports(self.ports)
+        if ports:
+            self.masscan.set_ports(ports)
 
+        # Create scan record
         scan = Scan.objects.create(scan_command=self.masscan.get_cmd(), scan_type='masscan')
 
         def process_discovery(host_ip, port_number, proto, current_time, scan):
@@ -195,12 +333,12 @@ class Command(BaseCommand):
                 # Wait for both streams and process to complete with timeout
                 await asyncio.wait_for(
                     asyncio.gather(stdout_task, stderr_task, process.wait()),
-                    timeout=self.timeout
+                    timeout=timeout
                 )
                 return process.returncode
             except asyncio.TimeoutError:
                 self.stdout.write(
-                    self.style.WARNING(f'Scan timed out after {self.timeout} seconds. Terminating process...')
+                    self.style.WARNING(f'Scan timed out after {timeout} seconds. Terminating process...')
                 )
                 # Terminate the process
                 process.terminate()
@@ -222,7 +360,7 @@ class Command(BaseCommand):
             redis = await aioredis.from_url(f'redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}')
             try:
                 self.stdout.write(self.style.SUCCESS(f'Running masscan command: {self.masscan.get_cmd()}'))
-                self.stdout.write(self.style.SUCCESS(f'Timeout set to: {self.timeout} seconds'))
+                self.stdout.write(self.style.SUCCESS(f'Timeout set to: {timeout} seconds'))
                 return_code = await process_runner(self.masscan.get_cmd(), redis)
                 
                 if return_code == -1:

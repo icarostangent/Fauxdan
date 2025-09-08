@@ -70,26 +70,33 @@ python manage.py run_scanner_service --job-types masscan nmap --max-concurrent 3
 
 ```bash
 # Queue a masscan job (replaces direct execution)
-python manage.py run_masscan_queued --target 192.168.1.0/24 --ports 80,443,8080
+python manage.py run_masscan --queue --target 192.168.1.0/24 --ports 80,443,8080
 
 # With additional options and timeout
-python manage.py run_masscan_queued \
+python manage.py run_masscan --queue \
     --target 10.0.0.0/8 \
     --ports 22,80,443,3306,5432 \
     --syn \
     --rate 1000 \
     --timeout 1800 \
-    --queue high_priority \
+    --queue-name high_priority \
     --priority 5
 
 # Schedule for later execution with custom timeout
-python manage.py run_masscan_queued \
+python manage.py run_masscan --queue \
     --target 172.16.0.0/16 \
     --timeout 3600 \
     --schedule "2024-01-15T14:30:00"
 
 # Quick scan with short timeout
-python manage.py run_masscan_queued \
+python manage.py run_masscan --queue \
+    --target 192.168.1.1 \
+    --ports 80,443 \
+    --timeout 60 \
+    --syn
+
+# Direct execution (no --queue flag)
+python manage.py run_masscan \
     --target 192.168.1.1 \
     --ports 80,443 \
     --timeout 60 \
@@ -245,11 +252,11 @@ The queue system includes comprehensive timeout protection to prevent runaway sc
 ### Timeout Usage
 
 ```bash
-# Quick scan with 30-second timeout
-python manage.py run_masscan_queued --target 192.168.1.1 --timeout 30 --ports 80,443
+# Quick scan with 30-second timeout (queued)
+python manage.py run_masscan --queue --target 192.168.1.1 --timeout 30 --ports 80,443
 
-# Long-running scan with 2-hour timeout
-python manage.py run_masscan_queued --target 10.0.0.0/8 --timeout 7200 --ports 1-65535
+# Long-running scan with 2-hour timeout (queued)
+python manage.py run_masscan --queue --target 10.0.0.0/8 --timeout 7200 --ports 1-65535
 
 # Direct execution with timeout
 python manage.py run_masscan --target 172.16.0.0/16 --timeout 1800 --syn
@@ -343,7 +350,7 @@ python manage.py queue_manager stats
 python manage.py queue_manager cleanup --dry-run
 
 # Test timeout functionality
-python manage.py run_masscan_queued --target 127.0.0.1 --timeout 5 --ports 80
+python manage.py run_masscan --queue --target 127.0.0.1 --timeout 5 --ports 80
 
 # Monitor job progress
 python manage.py queue_manager list --status running
@@ -353,7 +360,7 @@ python manage.py queue_manager list --status running
 
 To migrate from direct masscan execution to the queue system:
 
-1. **Replace direct calls**: Use `run_masscan_queued` instead of `run_masscan`
+1. **Replace direct calls**: Use `run_masscan --queue` for queued execution
 2. **Start workers**: Run `run_scanner_service` on worker machines
 3. **Update scripts**: Modify existing scripts to use the queue API
 4. **Monitor queues**: Set up monitoring for queue health and job status
@@ -380,7 +387,7 @@ To migrate from direct masscan execution to the queue system:
 python manage.py run_scanner_service
 
 # Queue a scan job
-python manage.py run_masscan_queued --target <target> --ports <ports> --timeout <seconds>
+python manage.py run_masscan --queue --target <target> --ports <ports> --timeout <seconds>
 
 # Check job status
 python manage.py queue_manager status <job-uuid>

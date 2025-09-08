@@ -1,195 +1,110 @@
 <template>
-  <div style="padding: 20px;">
+  <div class="host-detail">
     <!-- Loading and Error States -->
-    <div v-if="loading" style="text-align: center; padding: 20px;">Loading...</div>
-    <div v-else-if="error" style="text-align: center; padding: 20px; color: #ef4444;">{{ error }}</div>
+    <div v-if="loading" class="loading-state">Loading...</div>
+    <div v-else-if="error" class="error-state">{{ error }}</div>
     
-    <div v-else-if="host" style="max-width: 1200px; margin: 0 auto;">
+    <div v-else-if="host" class="host-container">
       <!-- Header Section -->
-      <div style="margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
-          <div>
-            <h1 style="font-size: 24px; font-weight: 600; margin: 0;">{{ host.ip }}</h1>
-            <div style="display: flex; gap: 12px; margin-top: 8px;">
-              <span style="
-                padding: 4px 12px;
-                border-radius: 12px;
-                font-size: 14px;
-                background-color: #f3f4f6;
-                color: #374151;
-              ">
+      <div class="header">
+        <div class="header-content">
+          <div class="host-info">
+            <h1 class="host-ip">{{ host.ip }}</h1>
+            <div class="host-meta">
+              <span class="privacy-badge" :class="{ 'public': !host.private, 'private': host.private }">
                 {{ host.private ? 'Private' : 'Public' }}
               </span>
-              <span style="font-size: 14px; color: #6b7280;">Last seen: {{ formatLastSeen(host.last_seen) }}</span>
+              <span class="last-seen">Last seen: {{ formatLastSeen(host.last_seen) }}</span>
             </div>
           </div>
-          <button 
-            style="
-              padding: 8px 16px;
-              background-color: #f3f4f6;
-              border: 1px solid #e5e7eb;
-              border-radius: 6px;
-              font-size: 14px;
-              color: #374151;
-            "
-            @click="$router.go(-1)"
-          >
-            Back to List
+          <button class="back-button" @click="$router.go(-1)">
+            ← Back to List
           </button>
         </div>
       </div>
 
       <!-- Main Content -->
-      <div style="display: grid; gap: 24px;">
+      <div class="main-content">
         <!-- Ports Section -->
-        <section style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Open Ports</h2>
-          <div style="display: grid; gap: 12px;">
-            <div v-for="port in host.ports" :key="port.id" 
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 12px;
-                background-color: #f9fafb;
-                border-radius: 6px;
-              "
-            >
-              <div style="display: flex; gap: 16px; align-items: center;">
-                <span style="font-size: 16px; font-weight: 500;">{{ port.port_number }}/{{ port.proto }}</span>
-                <span style="
-                  padding: 2px 8px;
-                  background-color: #e5e7eb;
-                  border-radius: 4px;
-                  font-size: 14px;
-                  color: #374151;
-                ">{{ port.status }}</span>
+        <section class="ports-section">
+          <h2 class="section-title">Open Ports</h2>
+          <div class="ports-grid">
+            <div v-for="port in host.ports" :key="port.id || `port-${port.port_number}`" class="port-card">
+              <div class="port-header">
+                <div class="port-info">
+                  <span class="port-number">{{ port.port_number }}/{{ port.proto }}</span>
+                  <span class="service-badge">{{ getServiceName(port.port_number) }}</span>
+                  <span class="status-badge">{{ port.status }}</span>
+                </div>
+                <span class="port-timestamp">{{ formatPortDate(port.last_seen) }}</span>
               </div>
-              <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                <span style="font-size: 12px; color: #6b7280;">Last seen: {{ formatPortDate(port.last_seen) }}</span>
-                <span v-if="port.banner" style="font-size: 12px; color: #6b7280; margin-top: 4px;">{{ port.banner }}</span>
+              
+              <div v-if="port.banner" class="banner-container">
+                <div class="banner-header">Banner</div>
+                <pre class="banner-content">{{ port.banner }}</pre>
+              </div>
+              
+              <div v-else class="no-banner">
+                <span class="no-banner-text">No banner information available</span>
               </div>
             </div>
           </div>
         </section>
 
         <!-- Domains Section -->
-        <section v-if="host.domains.length" style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Domains</h2>
-          <div style="display: grid; gap: 12px;">
-            <div v-for="domain in host.domains" :key="domain.id"
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 12px;
-                background-color: #f9fafb;
-                border-radius: 6px;
-              "
-            >
-              <span style="font-size: 14px;">{{ domain.name }}</span>
-              <span style="
-                padding: 2px 8px;
-                background-color: #e5e7eb;
-                border-radius: 4px;
-                font-size: 12px;
-                color: #6b7280;
-              ">{{ domain.source }}</span>
+        <section v-if="host.domains.length" class="domains-section">
+          <h2 class="section-title">Domains</h2>
+          <div class="domains-grid">
+            <div v-for="domain in host.domains" :key="domain.id" class="domain-card">
+              <div class="domain-name">{{ domain.name }}</div>
+              <div class="domain-source">{{ domain.source }}</div>
             </div>
           </div>
         </section>
 
         <!-- SSL Certificates Section -->
-        <section v-if="host.ssl_certificates && host.ssl_certificates.length > 0" style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: left;">
-          <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0; text-align: left;">SSL Certificates</h2>
-          <div style="display: grid; gap: 12px;">
-            <div v-for="cert in host.ssl_certificates" :key="cert.id"
-              style="
-                padding: 16px;
-                background-color: #f9fafb;
-                border-radius: 6px;
-                border: 1px solid #e5e7eb;
-                text-align: left;
-              "
-            >
-              <!-- Subject Info -->
-              <div style="margin-bottom: 16px; text-align: left;">
-                <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 8px 0; text-align: left;">Subject</h3>
-                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; text-align: left;">
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Common Name</div>
-                  <div style="font-size: 12px; text-align: left;">{{ cert.subject_cn || 'N/A' }}</div>
+        <section v-if="host.ssl_certificates && host.ssl_certificates.length > 0" class="ssl-section">
+          <h2 class="section-title">SSL Certificates</h2>
+          <div class="ssl-grid">
+            <div v-for="cert in host.ssl_certificates" :key="cert.id" class="cert-card">
+              <div class="cert-header">
+                <div class="cert-subject">{{ cert.subject_cn || 'Unknown Subject' }}</div>
+                <span class="cert-status" :class="getCertificateStatusClass(cert)">
+                  {{ getCertificateStatus(cert) }}
+                </span>
+              </div>
+              
+              <div class="cert-details">
+                <div class="cert-issuer">
+                  <span class="label">Issuer:</span>
+                  <span class="value">{{ cert.issuer_cn || 'Unknown Issuer' }}</span>
+                </div>
+                
+                <div class="cert-validity">
+                  <div class="validity-item">
+                    <span class="label">Valid From:</span>
+                    <span class="value">{{ formatDate(cert.valid_from) }}</span>
+                  </div>
+                  <div class="validity-item">
+                    <span class="label">Valid Until:</span>
+                    <span class="value">{{ formatDate(cert.valid_until) }}</span>
+                  </div>
+                </div>
+                
+                <div class="cert-fingerprint">
+                  <span class="label">Fingerprint:</span>
+                  <code class="fingerprint">{{ cert.fingerprint }}</code>
                 </div>
               </div>
-
-              <!-- Issuer Info -->
-              <div style="margin-bottom: 16px; text-align: left;">
-                <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 8px 0; text-align: left;">Issuer</h3>
-                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; text-align: left;">
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Common Name</div>
-                  <div style="font-size: 12px; text-align: left;">{{ cert.issuer_cn || 'N/A' }}</div>
-                </div>
-              </div>
-
-              <!-- Validity -->
-              <div style="margin-bottom: 16px; text-align: left;">
-                <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 8px 0; text-align: left;">Validity</h3>
-                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; text-align: left;">
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Not Before</div>
-                  <div style="font-size: 12px; text-align: left;">{{ formatDate(cert.valid_from) }}</div>
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Not After</div>
-                  <div style="font-size: 12px; text-align: left;">{{ formatDate(cert.valid_until) }}</div>
-                </div>
-              </div>
-
-              <!-- Certificate Details -->
-              <div style="margin-bottom: 16px; text-align: left;">
-                <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 8px 0; text-align: left;">Certificate Details</h3>
-                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; text-align: left;">
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Fingerprint</div>
-                  <div style="font-size: 12px; font-family: monospace; text-align: left;">{{ cert.fingerprint }}</div>
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Created</div>
-                  <div style="font-size: 12px; text-align: left;">{{ formatDate(cert.created_at) }}</div>
-                  <div style="font-size: 12px; color: #6b7280; text-align: left;">Updated</div>
-                  <div style="font-size: 12px; text-align: left;">{{ formatDate(cert.updated_at) }}</div>
-                </div>
-              </div>
-
-              <!-- Serial Number -->
-              <div v-if="cert.extensions?.subjectAltName && cert.extensions.subjectAltName.length > 0">
-                <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 8px 0;">Alternative Names</h3>
-                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                  <span v-for="(name, index) in cert.extensions.subjectAltName" :key="index"
-                    style="
-                      font-size: 12px;
-                      padding: 2px 8px;
-                      background-color: #e5e7eb;
-                      border-radius: 4px;
-                      color: #374151;
-                    "
-                  >
+              
+              <div v-if="(cert as any).extensions?.subjectAltName && (cert as any).extensions.subjectAltName.length > 0" class="cert-sans">
+                <div class="sans-label">Subject Alternative Names:</div>
+                <div class="sans-list">
+                  <span v-for="(name, index) in (cert as any).extensions.subjectAltName" :key="index" class="san-item">
                     {{ name }}
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Additional Info Section -->
-        <section style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Additional Information</h2>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-            <div style="padding: 12px; background-color: #f9fafb; border-radius: 6px;">
-              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Host ID</div>
-              <div style="font-size: 14px;">{{ host.id || 'N/A' }}</div>
-            </div>
-            <div style="padding: 12px; background-color: #f9fafb; border-radius: 6px;">
-              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Public Host</div>
-              <div style="font-size: 14px;">{{ host.public_host ? 'Yes' : 'No' }}</div>
-            </div>
-            <div style="padding: 12px; background-color: #f9fafb; border-radius: 6px;">
-              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Scan ID</div>
-              <div style="font-size: 14px;">{{ host.scan || 'N/A' }}</div>
             </div>
           </div>
         </section>
@@ -230,6 +145,60 @@ export default defineComponent({
       }
     }
 
+    // Helper function to get service name from port number
+    const getServiceName = (portNumber: number | null): string => {
+      if (!portNumber) return 'Unknown'
+      
+      const commonPorts: { [key: number]: string } = {
+        20: 'FTP-DATA', 21: 'FTP', 22: 'SSH', 23: 'TELNET', 25: 'SMTP', 53: 'DNS',
+        67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 80: 'HTTP', 110: 'POP3', 123: 'NTP',
+        135: 'RPC', 139: 'NetBIOS', 143: 'IMAP', 161: 'SNMP', 162: 'SNMP-TRAP',
+        179: 'BGP', 389: 'LDAP', 443: 'HTTPS', 445: 'SMB', 465: 'SMTPS',
+        514: 'SYSLOG', 515: 'LPD', 587: 'SMTP', 636: 'LDAPS', 993: 'IMAPS',
+        995: 'POP3S', 1433: 'MSSQL', 1521: 'Oracle', 3306: 'MySQL', 3389: 'RDP',
+        5432: 'PostgreSQL', 5900: 'VNC', 6379: 'Redis', 8080: 'HTTP-ALT',
+        8443: 'HTTPS-ALT', 9200: 'Elasticsearch', 27017: 'MongoDB'
+      }
+      
+      return commonPorts[portNumber] || `Port ${portNumber}`
+    }
+
+    // Helper function to get certificate status
+    const getCertificateStatus = (cert: any): string => {
+      const now = new Date()
+      const validUntil = new Date(cert.valid_until)
+      const validFrom = new Date(cert.valid_from)
+      
+      if (now < validFrom) return 'Not Yet Valid'
+      if (now > validUntil) return 'Expired'
+      
+      const daysUntilExpiry = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysUntilExpiry <= 30) return 'Expires Soon'
+      if (daysUntilExpiry <= 7) return 'Critical'
+      
+      return 'Valid'
+    }
+
+    // Helper function to get certificate status class
+    const getCertificateStatusClass = (cert: any): string => {
+      const status = getCertificateStatus(cert)
+      
+      switch (status) {
+        case 'Valid':
+          return 'status-valid'
+        case 'Expires Soon':
+          return 'status-warning'
+        case 'Critical':
+          return 'status-critical'
+        case 'Expired':
+          return 'status-expired'
+        case 'Not Yet Valid':
+          return 'status-pending'
+        default:
+          return 'status-unknown'
+      }
+    }
+
     onMounted(() => {
       // Track page view when component mounts
       analytics.trackPageView(`/hosts/${route.params.id}`)
@@ -242,8 +211,408 @@ export default defineComponent({
       error,
       formatLastSeen,
       formatPortDate,
-      formatDate
+      formatDate,
+      getServiceName,
+      getCertificateStatus,
+      getCertificateStatusClass
     }
   }
 })
 </script>
+
+<style scoped>
+.host-detail {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.loading-state, .error-state {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 18px;
+}
+
+.error-state {
+  color: #ef4444;
+}
+
+.host-container {
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.header {
+  background: #2d2d2d;
+  padding: 24px;
+  border-bottom: 1px solid #404040;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.host-info {
+  flex: 1;
+}
+
+.host-ip {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 12px 0;
+}
+
+.host-meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.privacy-badge {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.privacy-badge.public {
+  background: #10b981;
+  color: white;
+}
+
+.privacy-badge.private {
+  background: #6b7280;
+  color: white;
+}
+
+.last-seen {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.back-button {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.back-button:hover {
+  background: #2563eb;
+}
+
+.main-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 20px 0;
+}
+
+/* Ports Section */
+.ports-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.ports-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.port-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #404040;
+}
+
+.port-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.port-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.port-number {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.service-badge {
+  padding: 4px 12px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  background: #10b981;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.port-timestamp {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.banner-container {
+  background: #0f0f0f;
+  border-radius: 6px;
+  padding: 16px;
+  border: 1px solid #404040;
+}
+
+.banner-header {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.banner-content {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  color: #10b981;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.no-banner {
+  text-align: center;
+  padding: 20px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.no-banner-text {
+  font-size: 14px;
+}
+
+/* Domains Section */
+.domains-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.domains-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.domain-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #404040;
+  transition: border-color 0.2s;
+}
+
+.domain-card:hover {
+  border-color: #3b82f6;
+}
+
+.domain-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.domain-source {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* SSL Section */
+.ssl-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.ssl-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.cert-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #404040;
+}
+
+.cert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.cert-subject {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.cert-status {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-valid {
+  background: #10b981;
+  color: white;
+}
+
+.status-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.status-critical {
+  background: #ef4444;
+  color: white;
+}
+
+.status-expired {
+  background: #6b7280;
+  color: white;
+}
+
+.status-pending {
+  background: #3b82f6;
+  color: white;
+}
+
+.status-unknown {
+  background: #6b7280;
+  color: white;
+}
+
+.cert-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cert-issuer, .cert-validity, .cert-fingerprint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.validity-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #404040;
+}
+
+.validity-item:last-child {
+  border-bottom: none;
+}
+
+.fingerprint {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #10b981;
+  background: #0f0f0f;
+  padding: 8px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.cert-sans {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #404040;
+}
+
+.sans-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.sans-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.san-item {
+  padding: 4px 12px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+</style>

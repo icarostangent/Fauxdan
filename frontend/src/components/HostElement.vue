@@ -13,37 +13,77 @@
     <div class="header">
       <h3 class="ip">{{ host.ip }}</h3>
       <div class="meta" style="justify-content: flex-start;">
-        <span class="privacy-badge" style="text-align: left;">{{ host.private ? 'Private' : 'Public' }}</span>
-        <span class="last-seen" style="text-align: left;">Last seen: {{ formatLastSeen(host.last_seen) }}</span>
+        <span class="privacy-badge" :class="{ 'public': !host.private, 'private': host.private }">
+          {{ host.private ? 'Private' : 'Public' }}
+        </span>
+        <span class="last-seen" style="text-align: left;">{{ formatLastSeen(host.last_seen) }}</span>
       </div>
     </div>
 
-    <!-- Ports -->
-    <div v-if="host.ports.length" class="ports-section">
-      <h4 class="section-title" style="text-align: left;">Open Ports</h4>
+    <!-- Quick Stats -->
+    <div class="quick-stats">
+      <div class="stat-item">
+        <span class="stat-label">Ports:</span>
+        <span class="stat-value">{{ host.ports?.length || 0 }}</span>
+      </div>
+      <div class="stat-item" v-if="host.ssl_certificates?.length">
+        <span class="stat-label">SSL:</span>
+        <span class="stat-value ssl">{{ host.ssl_certificates.length }}</span>
+      </div>
+      <div class="stat-item" v-if="host.domains?.length">
+        <span class="stat-label">Domains:</span>
+        <span class="stat-value">{{ host.domains.length }}</span>
+      </div>
+    </div>
+
+    <!-- Ports with Service Detection -->
+    <div v-if="host.ports?.length" class="ports-section">
+      <h4 class="section-title">Open Ports</h4>
       <div class="ports-grid">
-        <div v-for="port in host.ports" :key="port.id" class="port-item" style="text-align: left;">
-          <span class="port-number" style="text-align: left;">{{ port.port_number }}/{{ port.proto }}</span>
-          <span class="port-status" style="text-align: left;">{{ port.status }}</span>
+        <div v-for="port in host.ports.slice(0, 6)" :key="port.id" class="port-item">
+          <div class="port-info">
+            <span class="port-number">{{ port.port_number }}/{{ port.proto }}</span>
+            <span class="port-service">{{ getServiceName(port.port_number, port.banner) }}</span>
+          </div>
+          <div class="port-meta">
+            <span class="port-status" :class="port.status">{{ port.status }}</span>
+            <span v-if="isSSLPort(port.port_number)" class="ssl-indicator">🔒</span>
+          </div>
+        </div>
+        <div v-if="host.ports.length > 6" class="more-ports">
+          +{{ host.ports.length - 6 }} more
         </div>
       </div>
     </div>
 
     <!-- Domains -->
-    <div v-if="host.domains.length" class="domains-section">
-      <h4 class="section-title" style="text-align: left;">Domains</h4>
+    <div v-if="host.domains?.length" class="domains-section">
+      <h4 class="section-title">Domains</h4>
       <div class="domains-list">
-        <div v-for="domain in host.domains" :key="domain.id" class="domain-item" style="justify-content: flex-start;">
-          <span class="domain-name" style="text-align: left;">{{ domain.name }}</span>
-          <span class="domain-source" style="text-align: left; margin-left: auto;">{{ domain.source }}</span>
+        <div v-for="domain in host.domains.slice(0, 3)" :key="domain.id" class="domain-item">
+          <span class="domain-name">{{ domain.name }}</span>
+          <span class="domain-source">{{ domain.source }}</span>
         </div>
+        <div v-if="host.domains.length > 3" class="more-domains">
+          +{{ host.domains.length - 3 }} more domains
+        </div>
+      </div>
+    </div>
+
+    <!-- SSL Certificates Info -->
+    <div v-if="host.ssl_certificates?.length" class="ssl-section">
+      <h4 class="section-title">SSL Certificates</h4>
+      <div class="ssl-info">
+        <span class="ssl-count">{{ host.ssl_certificates.length }} certificate(s)</span>
+        <span v-if="hasValidCertificates" class="ssl-status valid">Valid</span>
+        <span v-else class="ssl-status invalid">Invalid/Expired</span>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, ref } from 'vue'
+import { defineComponent, PropType, ref, computed } from 'vue'
 import { Host } from '@/types'
 import { formatLastSeen, formatDate, formatPortDate } from '@/utils/date'
 import { useRouter } from 'vue-router'
@@ -78,12 +118,76 @@ export default defineComponent({
       }
     }
 
+    // Service detection based on port number and banner
+    const getServiceName = (portNumber: number, banner: string | null) => {
+      const serviceMap: { [key: number]: string } = {
+        21: 'FTP',
+        22: 'SSH',
+        23: 'Telnet',
+        25: 'SMTP',
+        53: 'DNS',
+        80: 'HTTP',
+        110: 'POP3',
+        143: 'IMAP',
+        443: 'HTTPS',
+        993: 'IMAPS',
+        995: 'POP3S',
+        1433: 'MSSQL',
+        3306: 'MySQL',
+        3389: 'RDP',
+        5432: 'PostgreSQL',
+        5900: 'VNC',
+        6379: 'Redis',
+        27017: 'MongoDB',
+        8080: 'HTTP-Alt',
+        8443: 'HTTPS-Alt'
+      }
+      
+      if (serviceMap[portNumber]) {
+        return serviceMap[portNumber]
+      }
+      
+      // Try to detect from banner
+      if (banner) {
+        const bannerLower = banner.toLowerCase()
+        if (bannerLower.includes('apache')) return 'Apache'
+        if (bannerLower.includes('nginx')) return 'Nginx'
+        if (bannerLower.includes('iis')) return 'IIS'
+        if (bannerLower.includes('ssh')) return 'SSH'
+        if (bannerLower.includes('ftp')) return 'FTP'
+        if (bannerLower.includes('smtp')) return 'SMTP'
+        if (bannerLower.includes('http')) return 'HTTP'
+      }
+      
+      return 'Unknown'
+    }
+
+    // Check if port is commonly used for SSL/TLS
+    const isSSLPort = (portNumber: number) => {
+      const sslPorts = [443, 993, 995, 465, 587, 8443, 9443]
+      return sslPorts.includes(portNumber)
+    }
+
+    // Check if host has valid SSL certificates
+    const hasValidCertificates = computed(() => {
+      if (!props.host.ssl_certificates?.length) return false
+      
+      const now = new Date()
+      return props.host.ssl_certificates.some(cert => {
+        const validUntil = new Date(cert.valid_until)
+        return validUntil > now
+      })
+    })
+
     return {
       hover,
       navigateToHost,
       formatLastSeen,
       formatPortDate,
-      formatDate
+      formatDate,
+      getServiceName,
+      isSSLPort,
+      hasValidCertificates
     }
   }
 })
@@ -118,9 +222,18 @@ export default defineComponent({
 
 .privacy-badge {
   padding: 2px 8px;
-  background-color: #f3f4f6;
   border-radius: 12px;
   font-size: 12px;
+  font-weight: 500;
+}
+
+.privacy-badge.public {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.privacy-badge.private {
+  background-color: #f3f4f6;
   color: #374151;
 }
 
@@ -199,5 +312,147 @@ export default defineComponent({
   font-size: 11px;
   flex-shrink: 0;
   padding-left: 8px;
+}
+
+/* Quick Stats */
+.quick-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.stat-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #374151;
+  font-weight: 600;
+}
+
+.stat-value.ssl {
+  color: #059669;
+  background-color: #d1fae5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Enhanced Ports Section */
+.port-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.port-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.port-number {
+  font-weight: 600;
+  color: #374151;
+}
+
+.port-service {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.port-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.port-status {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.port-status.open {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.port-status.closed {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.port-status.filtered {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.ssl-indicator {
+  font-size: 12px;
+}
+
+.more-ports,
+.more-domains {
+  text-align: center;
+  color: #6b7280;
+  font-size: 11px;
+  font-style: italic;
+  padding: 8px;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+/* SSL Section */
+.ssl-section {
+  margin-bottom: 16px;
+}
+
+.ssl-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f0f9ff;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.ssl-count {
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.ssl-status {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.ssl-status.valid {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.ssl-status.invalid {
+  background-color: #fef2f2;
+  color: #dc2626;
 }
 </style>

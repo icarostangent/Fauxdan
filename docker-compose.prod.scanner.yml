@@ -1,7 +1,7 @@
 services:
   scanner:
     image: gitlab.icarostangent.lab:5050/josh/fauxdan/scanner
-    command: ["python3", "manage.py", "run_masscan", "--target", "0.0.0.0/0"]
+    command: ["python3", "manage.py", "run_scanner_service", "--max-concurrent", "5", "--job-types", "masscan,banner_grab,ssl_cert,domain_enum"]
     restart: unless-stopped
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}

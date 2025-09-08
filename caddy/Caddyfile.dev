@@ -27,9 +27,26 @@ localhost, dev2.icarostangent.lab {
         file_server
     }
 
+    # Handle WebSocket connections for hot reload
+    handle /ws {
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+        }
+    }
+
     # Handle frontend requests - only for non-API, non-static paths
     handle {
-        reverse_proxy frontend:3000
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     # Structured JSON logging for ELK stack

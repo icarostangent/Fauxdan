@@ -10,7 +10,7 @@ from internet.lib.queue_service import QueueService
 
 
 class Command(BaseCommand):
-    help = 'Run the scanner service worker'
+    help = 'Run the unified scanner service worker that handles both scanner jobs (masscan, nmap, custom) and ancillary jobs (banner_grab, ssl_cert, domain_enum)'
     
     def __init__(self):
         super().__init__()
@@ -21,8 +21,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--job-types',
             nargs='+',
-            default=['masscan', 'nmap', 'custom'],
-            help='Supported job types (default: masscan nmap custom)'
+            default=['masscan', 'nmap', 'custom', 'banner_grab', 'ssl_cert', 'domain_enum'],
+            help='Supported job types: scanner jobs (masscan, nmap, custom) and ancillary jobs (banner_grab, ssl_cert, domain_enum, service_detection, vulnerability_scan)'
         )
         parser.add_argument(
             '--max-concurrent',

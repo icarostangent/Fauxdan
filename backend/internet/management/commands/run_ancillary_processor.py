@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Run ancillary job processor to handle banner grabbing, domain enumeration, SSL cert grabbing, and other post-scan tasks'
+    help = '[DEPRECATED] Run ancillary job processor to handle banner grabbing, domain enumeration, SSL cert grabbing, and other post-scan tasks. Use run_scanner_service instead for unified job processing.'
 
     def add_arguments(self, parser):
         parser.add_argument(
