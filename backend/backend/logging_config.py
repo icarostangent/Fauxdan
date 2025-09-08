@@ -107,7 +107,21 @@ def get_logging_config():
             os.makedirs(log_dir, exist_ok=True)
         except (OSError, PermissionError):
             # If we can't create the directory, fall back to console-only logging
-            return {
+            pass
+    
+    # Check if we can actually write to the log directory
+    try:
+        test_file = os.path.join(log_dir, 'test_write.tmp')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        can_write_logs = True
+    except (OSError, PermissionError):
+        can_write_logs = False
+    
+    if not can_write_logs:
+        # If we can't write to the directory, fall back to console-only logging
+        return {
                 'version': 1,
                 'disable_existing_loggers': False,
                 'formatters': {

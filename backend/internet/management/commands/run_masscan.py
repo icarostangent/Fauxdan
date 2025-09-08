@@ -59,6 +59,12 @@ class Command(BaseCommand):
             type=int,
             help='Scan rate in packets per second (e.g. 1000)'
         )
+        parser.add_argument(
+            '--timeout',
+            type=int,
+            default=3600,  # 1 hour default timeout
+            help='Maximum scan duration in seconds (default: 3600)'
+        )
 
     def handle(self, *args, **kwargs):
         if not kwargs['target']:
@@ -73,6 +79,7 @@ class Command(BaseCommand):
         self.use_proxychains = kwargs['use_proxychains']
         self.resume = kwargs['resume']
         self.rate = kwargs['rate']
+        self.timeout = kwargs['timeout']
 
         self.masscan.set_target(self.target)
         if self.syn:
@@ -150,7 +157,7 @@ class Command(BaseCommand):
             return None
 
         async def process_runner(command, redis):
-            """Run the process and handle output"""
+            """Run the process and handle output with timeout"""
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
@@ -184,21 +191,59 @@ class Command(BaseCommand):
             stdout_task = asyncio.create_task(read_stream(process.stdout, parse_stdout, redis))
             stderr_task = asyncio.create_task(read_stream(process.stderr, None, redis))
 
-            # Wait for both streams and process to complete
-            await asyncio.gather(stdout_task, stderr_task)
-            await process.wait()
-
-            return process.returncode
+            try:
+                # Wait for both streams and process to complete with timeout
+                await asyncio.wait_for(
+                    asyncio.gather(stdout_task, stderr_task, process.wait()),
+                    timeout=self.timeout
+                )
+                return process.returncode
+            except asyncio.TimeoutError:
+                self.stdout.write(
+                    self.style.WARNING(f'Scan timed out after {self.timeout} seconds. Terminating process...')
+                )
+                # Terminate the process
+                process.terminate()
+                try:
+                    # Give it a moment to terminate gracefully
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    # Force kill if it doesn't terminate gracefully
+                    process.kill()
+                    await process.wait()
+                
+                # Cancel the stream reading tasks
+                stdout_task.cancel()
+                stderr_task.cancel()
+                
+                return -1  # Return error code for timeout
 
         async def main():
             redis = await aioredis.from_url(f'redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}')
             try:
                 self.stdout.write(self.style.SUCCESS(f'Running masscan command: {self.masscan.get_cmd()}'))
+                self.stdout.write(self.style.SUCCESS(f'Timeout set to: {self.timeout} seconds'))
                 return_code = await process_runner(self.masscan.get_cmd(), redis)
-                # Wrap the database operations with sync_to_async
-                await sync_to_async(setattr)(scan, 'status', 'completed')
-                await sync_to_async(setattr)(scan, 'end_time', timezone.now())
-                await sync_to_async(lambda: scan.save())()
+                
+                if return_code == -1:
+                    # Timeout occurred
+                    await sync_to_async(setattr)(scan, 'status', 'timeout')
+                    await sync_to_async(setattr)(scan, 'end_time', timezone.now())
+                    await sync_to_async(lambda: scan.save())()
+                    self.stdout.write(self.style.ERROR('Scan timed out and was terminated'))
+                elif return_code == 0:
+                    # Success
+                    await sync_to_async(setattr)(scan, 'status', 'completed')
+                    await sync_to_async(setattr)(scan, 'end_time', timezone.now())
+                    await sync_to_async(lambda: scan.save())()
+                    self.stdout.write(self.style.SUCCESS('Scan completed successfully'))
+                else:
+                    # Error
+                    await sync_to_async(setattr)(scan, 'status', 'failed')
+                    await sync_to_async(setattr)(scan, 'end_time', timezone.now())
+                    await sync_to_async(lambda: scan.save())()
+                    self.stdout.write(self.style.ERROR(f'Scan failed with return code: {return_code}'))
+                    
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'Command failed with error: {str(e)}'))
                 await sync_to_async(setattr)(scan, 'status', 'failed')

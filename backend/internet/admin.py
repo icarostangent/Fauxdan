@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
-from .models import Scan, Host, Port, Proxy, Domain, DNSRelay, SSLCertificate
+from .models import Scan, Host, Port, Proxy, Domain, DNSRelay, SSLCertificate, JobQueue, ScannerJob, JobWorker
 
 # Custom admin site header and title
 admin.site.site_header = "Fauxdan Internet Scanner Dashboard"
@@ -298,3 +298,138 @@ class InternetScannerDashboard(LogEntry):
         verbose_name_plural = "Internet Scanner Dashboard"
 
 admin.site.register(InternetScannerDashboard, InternetScannerDashboardAdmin)
+
+
+# Queue Management Admin Classes
+
+class JobQueueResource(resources.ModelResource):
+    class Meta:
+        model = JobQueue
+        fields = ('id', 'name', 'description', 'max_concurrent_jobs', 'priority', 'enabled', 'created_at', 'updated_at')
+        export_order = fields
+
+@admin.register(JobQueue)
+class JobQueueAdmin(ImportExportModelAdmin):
+    resource_class = JobQueueResource
+    list_display = ('name', 'enabled', 'priority', 'max_concurrent_jobs', 'get_job_counts', 'created_at')
+    list_filter = ('enabled', 'priority', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    list_per_page = 50
+    
+    def get_job_counts(self, obj):
+        pending = obj.jobs.filter(status='pending').count()
+        running = obj.jobs.filter(status='running').count()
+        completed = obj.jobs.filter(status='completed').count()
+        failed = obj.jobs.filter(status='failed').count()
+        
+        return format_html(
+            '<span style="color: #007cba;">P: {}</span> | '
+            '<span style="color: #ffc107;">R: {}</span> | '
+            '<span style="color: #28a745;">C: {}</span> | '
+            '<span style="color: #dc3545;">F: {}</span>',
+            pending, running, completed, failed
+        )
+    get_job_counts.short_description = "Jobs (P/R/C/F)"
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('jobs')
+
+
+class ScannerJobResource(resources.ModelResource):
+    class Meta:
+        model = ScannerJob
+        fields = ('id', 'job_uuid', 'job_type', 'status', 'priority', 'target', 'ports', 'scan_options', 
+                 'queue', 'assigned_worker', 'created_at', 'started_at', 'completed_at', 'progress', 'user')
+        export_order = fields
+
+@admin.register(ScannerJob)
+class ScannerJobAdmin(ImportExportModelAdmin):
+    resource_class = ScannerJobResource
+    list_display = ('job_uuid', 'job_type', 'status', 'target', 'priority', 'queue', 'assigned_worker', 
+                   'progress', 'created_at', 'get_duration')
+    list_filter = ('status', 'job_type', 'priority', 'queue', 'assigned_worker', 'created_at')
+    search_fields = ('job_uuid', 'target', 'user__username')
+    readonly_fields = ('job_uuid', 'created_at', 'started_at', 'completed_at')
+    list_per_page = 100
+    actions = ['cancel_jobs', 'retry_jobs']
+    
+    def get_duration(self, obj):
+        if obj.started_at and obj.completed_at:
+            duration = obj.completed_at - obj.started_at
+            return f"{duration.total_seconds():.1f}s"
+        elif obj.started_at:
+            duration = timezone.now() - obj.started_at
+            return f"{duration.total_seconds():.1f}s (running)"
+        return "-"
+    get_duration.short_description = "Duration"
+    
+    def cancel_jobs(self, request, queryset):
+        """Cancel selected jobs"""
+        count = 0
+        for job in queryset:
+            if job.status in ['pending', 'queued', 'running']:
+                job.mark_cancelled()
+                count += 1
+        self.message_user(request, f"Successfully cancelled {count} jobs.")
+    cancel_jobs.short_description = "Cancel selected jobs"
+    
+    def retry_jobs(self, request, queryset):
+        """Retry selected failed jobs"""
+        count = 0
+        for job in queryset:
+            if job.can_retry():
+                job.status = 'pending'
+                job.retry_count += 1
+                job.error_message = ''
+                job.assigned_worker = None
+                job.save()
+                count += 1
+        self.message_user(request, f"Successfully queued {count} jobs for retry.")
+    retry_jobs.short_description = "Retry selected jobs"
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('queue', 'assigned_worker', 'user', 'scan')
+
+
+class JobWorkerResource(resources.ModelResource):
+    class Meta:
+        model = JobWorker
+        fields = ('id', 'worker_id', 'status', 'hostname', 'pid', 'supported_job_types', 
+                 'max_concurrent_jobs', 'current_job_count', 'last_heartbeat', 'created_at', 'version')
+        export_order = fields
+
+@admin.register(JobWorker)
+class JobWorkerAdmin(ImportExportModelAdmin):
+    resource_class = JobWorkerResource
+    list_display = ('worker_id', 'status', 'hostname', 'pid', 'current_job_count', 'max_concurrent_jobs', 
+                   'last_heartbeat', 'get_availability', 'version')
+    list_filter = ('status', 'hostname', 'last_heartbeat', 'created_at')
+    search_fields = ('worker_id', 'hostname')
+    readonly_fields = ('worker_id', 'created_at', 'last_heartbeat')
+    list_per_page = 50
+    actions = ['mark_offline', 'reset_job_count']
+    
+    def get_availability(self, obj):
+        if obj.is_available():
+            return format_html('<span style="color: #28a745;">Available</span>')
+        else:
+            return format_html('<span style="color: #dc3545;">Busy/Offline</span>')
+    get_availability.short_description = "Availability"
+    
+    def mark_offline(self, request, queryset):
+        """Mark selected workers as offline"""
+        count = queryset.update(status='offline')
+        self.message_user(request, f"Marked {count} workers as offline.")
+    mark_offline.short_description = "Mark selected workers as offline"
+    
+    def reset_job_count(self, request, queryset):
+        """Reset job count for selected workers"""
+        count = 0
+        for worker in queryset:
+            worker.current_job_count = 0
+            worker.status = 'idle' if worker.status == 'busy' else worker.status
+            worker.save()
+            count += 1
+        self.message_user(request, f"Reset job count for {count} workers.")
+    reset_job_count.short_description = "Reset job count for selected workers"

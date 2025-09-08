@@ -1,6 +1,9 @@
 import uuid
+import json
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
+from django.core.serializers.json import DjangoJSONEncoder
 
 
 class Scan(models.Model):
@@ -120,4 +123,184 @@ class SSLCertificate(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['host']),  # Critical for prefetch performance
+        ]
+
+
+class JobQueue(models.Model):
+    """Represents a queue for scanner jobs"""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    max_concurrent_jobs = models.PositiveIntegerField(default=5)
+    priority = models.PositiveIntegerField(default=0, help_text="Higher number = higher priority")
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['-priority', 'name']
+
+
+class ScannerJob(models.Model):
+    """Represents a scanner job in the queue"""
+    
+    JOB_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('queued', 'Queued'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+        ('retrying', 'Retrying'),
+    ]
+    
+    JOB_TYPE_CHOICES = [
+        ('masscan', 'Masscan'),
+        ('nmap', 'Nmap'),
+        ('custom', 'Custom'),
+    ]
+
+    job_uuid = models.UUIDField(unique=True, default=uuid.uuid4)
+    job_type = models.CharField(max_length=20, choices=JOB_TYPE_CHOICES, default='masscan')
+    status = models.CharField(max_length=20, choices=JOB_STATUS_CHOICES, default='pending')
+    priority = models.PositiveIntegerField(default=0, help_text="Higher number = higher priority")
+    
+    # Job configuration
+    target = models.CharField(max_length=500, help_text="Target IP, range, or hostname")
+    ports = models.JSONField(default=list, blank=True, help_text="List of ports to scan")
+    scan_options = models.JSONField(default=dict, blank=True, help_text="Additional scan options")
+    
+    # Queue and worker assignment
+    queue = models.ForeignKey(JobQueue, on_delete=models.CASCADE, related_name='jobs')
+    assigned_worker = models.ForeignKey('JobWorker', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
+    
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True, help_text="When to start the job")
+    
+    # Results and metadata
+    scan = models.ForeignKey(Scan, on_delete=models.SET_NULL, null=True, blank=True, related_name='scanner_jobs')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='scanner_jobs')
+    retry_count = models.PositiveIntegerField(default=0)
+    max_retries = models.PositiveIntegerField(default=3)
+    error_message = models.TextField(blank=True)
+    progress = models.PositiveIntegerField(default=0, help_text="Progress percentage (0-100)")
+    
+    # Job metadata
+    metadata = models.JSONField(default=dict, blank=True, help_text="Additional job metadata")
+    
+    def __str__(self):
+        return f"{self.job_type} - {self.target} ({self.status})"
+    
+    def can_retry(self):
+        """Check if job can be retried"""
+        return self.retry_count < self.max_retries and self.status in ['failed', 'cancelled']
+    
+    def mark_started(self):
+        """Mark job as started"""
+        self.status = 'running'
+        self.started_at = timezone.now()
+        self.save(update_fields=['status', 'started_at'])
+    
+    def mark_completed(self):
+        """Mark job as completed"""
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        self.progress = 100
+        self.save(update_fields=['status', 'completed_at', 'progress'])
+    
+    def mark_failed(self, error_message=""):
+        """Mark job as failed"""
+        self.status = 'failed'
+        self.completed_at = timezone.now()
+        self.error_message = error_message
+        self.save(update_fields=['status', 'completed_at', 'error_message'])
+    
+    def mark_cancelled(self):
+        """Mark job as cancelled"""
+        self.status = 'cancelled'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at'])
+    
+    def update_progress(self, progress):
+        """Update job progress (0-100)"""
+        self.progress = max(0, min(100, progress))
+        self.save(update_fields=['progress'])
+    
+    class Meta:
+        ordering = ['-priority', 'created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['job_type']),
+            models.Index(fields=['queue', 'status']),
+            models.Index(fields=['scheduled_for']),
+            models.Index(fields=['assigned_worker']),
+        ]
+
+
+class JobWorker(models.Model):
+    """Represents a worker process that can execute scanner jobs"""
+    
+    WORKER_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('idle', 'Idle'),
+        ('busy', 'Busy'),
+        ('offline', 'Offline'),
+        ('error', 'Error'),
+    ]
+    
+    worker_id = models.CharField(max_length=100, unique=True)
+    status = models.CharField(max_length=20, choices=WORKER_STATUS_CHOICES, default='idle')
+    hostname = models.CharField(max_length=255)
+    pid = models.PositiveIntegerField(null=True, blank=True)
+    
+    # Worker capabilities
+    supported_job_types = models.JSONField(default=list, help_text="List of supported job types")
+    max_concurrent_jobs = models.PositiveIntegerField(default=1)
+    current_job_count = models.PositiveIntegerField(default=0)
+    
+    # Timing
+    last_heartbeat = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Worker metadata
+    version = models.CharField(max_length=50, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    def __str__(self):
+        return f"{self.worker_id} ({self.status})"
+    
+    def is_available(self):
+        """Check if worker can accept new jobs"""
+        return (
+            self.status in ['active', 'idle'] and 
+            self.current_job_count < self.max_concurrent_jobs
+        )
+    
+    def update_heartbeat(self):
+        """Update worker heartbeat"""
+        self.last_heartbeat = timezone.now()
+        self.save(update_fields=['last_heartbeat'])
+    
+    def increment_job_count(self):
+        """Increment current job count"""
+        self.current_job_count += 1
+        self.status = 'busy' if self.current_job_count > 0 else 'idle'
+        self.save(update_fields=['current_job_count', 'status'])
+    
+    def decrement_job_count(self):
+        """Decrement current job count"""
+        self.current_job_count = max(0, self.current_job_count - 1)
+        self.status = 'busy' if self.current_job_count > 0 else 'idle'
+        self.save(update_fields=['current_job_count', 'status'])
+    
+    class Meta:
+        ordering = ['-last_heartbeat']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['last_heartbeat']),
         ]
