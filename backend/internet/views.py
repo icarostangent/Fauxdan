@@ -65,13 +65,39 @@ class DNSRelayViewSet(viewsets.ModelViewSet):
 
 class UniversalSearchView(APIView):
     def get(self, request):
+        from django.core.paginator import Paginator
+        from django.db.models import Q
+        
         query = request.GET.get('q', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 50))
+        
         if not query:
             return Response({'error': 'Query parameter "q" is required'}, status=400)
         
-        # Simple search implementation
-        results = {'query': query, 'results': []}
-        return Response(results)
+        # Search hosts by IP address, domain names, or port numbers
+        hosts = Host.objects.filter(
+            Q(ip__icontains=query) | 
+            Q(domains__name__icontains=query) |
+            Q(ports__port_number__icontains=query)
+        ).distinct().prefetch_related('ports', 'domains', 'ssl_certificates')
+        
+        # Paginate results
+        paginator = Paginator(hosts, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Serialize the results
+        serializer = HostSerializer(page_obj.object_list, many=True)
+        
+        return Response({
+            'count': paginator.count,
+            'next': page_obj.next_page_number() if page_obj.has_next() else None,
+            'previous': page_obj.previous_page_number() if page_obj.has_previous() else None,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'results': serializer.data
+        })
 
 
 class CreateScanView(APIView):
