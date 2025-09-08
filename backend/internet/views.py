@@ -75,11 +75,12 @@ class UniversalSearchView(APIView):
         if not query:
             return Response({'error': 'Query parameter "q" is required'}, status=400)
         
-        # Search hosts by IP address, domain names, or port numbers
+        # Search hosts by IP address, domain names, port numbers, or banners
         hosts = Host.objects.filter(
             Q(ip__icontains=query) | 
             Q(domains__name__icontains=query) |
-            Q(ports__port_number__icontains=query)
+            Q(ports__port_number__icontains=query) |
+            Q(ports__banner__icontains=query)
         ).distinct().prefetch_related('ports', 'domains', 'ssl_certificates')
         
         # Paginate results

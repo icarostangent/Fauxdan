@@ -1,0 +1,23 @@
+FROM ubuntu:22.04
+
+WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies (no masscan needed for ancillary jobs)
+RUN apt-get -y update && apt-get -y upgrade && \
+    apt-get -y install build-essential python3-pip \
+    python3-dev libpq-dev postgresql-client
+
+# Install Python dependencies
+COPY requirements.txt ./
+RUN pip3 install -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /var/log/app
+
+# Default command
+CMD ["python3", "manage.py", "run_ancillary_processor", "--max-jobs", "20", "--interval", "3"]

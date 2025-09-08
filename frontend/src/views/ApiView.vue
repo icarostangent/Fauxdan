@@ -255,6 +255,7 @@
                     <li>Domain names</li>
                     <li>Port numbers (1-65535)</li>
                     <li>Protocols (TCP/UDP)</li>
+                    <li>Service banners (e.g., "Apache", "nginx", "OpenSSH")</li>
                   </ul>
                 </div>
                 <div class="detail-column">
@@ -262,7 +263,8 @@
                   <pre class="code-example">GET /api/search/?q=192.168.1.1
 GET /api/search/?q=example.com
 GET /api/search/?q=80
-GET /api/search/?q=tcp</pre>
+GET /api/search/?q=tcp
+GET /api/search/?q=Apache</pre>
                 </div>
               </div>
             </div>

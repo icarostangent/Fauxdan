@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
-from .models import Scan, Host, Port, Proxy, Domain, DNSRelay, SSLCertificate, JobQueue, ScannerJob, JobWorker
+from .models import Scan, Host, Port, Proxy, Domain, DNSRelay, SSLCertificate, JobQueue, ScannerJob, JobWorker, AncillaryJob, BannerGrabJob
 
 # Custom admin site header and title
 admin.site.site_header = "Fauxdan Internet Scanner Dashboard"
@@ -433,3 +433,80 @@ class JobWorkerAdmin(ImportExportModelAdmin):
             count += 1
         self.message_user(request, f"Reset job count for {count} workers.")
     reset_job_count.short_description = "Reset job count for selected workers"
+
+
+@admin.register(AncillaryJob)
+class AncillaryJobAdmin(admin.ModelAdmin):
+    list_display = ('job_type', 'host_ip', 'port_number', 'protocol', 'status', 'priority', 'created_at', 'assigned_worker', 'get_result_preview')
+    list_filter = ('job_type', 'status', 'protocol', 'priority', 'created_at', 'assigned_worker')
+    search_fields = ('host_ip', 'port_number', 'result_data')
+    readonly_fields = ('job_uuid', 'created_at', 'started_at', 'completed_at')
+    ordering = ['-priority', '-created_at']
+    
+    fieldsets = (
+        ('Job Information', {
+            'fields': ('job_uuid', 'status', 'priority', 'created_at', 'started_at', 'completed_at')
+        }),
+        ('Job Type', {
+            'fields': ('job_type',)
+        }),
+        ('Target', {
+            'fields': ('host_ip', 'port_number', 'protocol')
+        }),
+        ('Relations', {
+            'fields': ('host', 'port', 'scanner_job', 'assigned_worker')
+        }),
+        ('Results', {
+            'fields': ('result_data', 'error_message', 'retry_count', 'max_retries')
+        }),
+        ('Metadata', {
+            'fields': ('metadata',),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_result_preview(self, obj):
+        if obj.result_data:
+            # Format result data based on job type
+            if obj.job_type == 'banner_grab' and 'banner' in obj.result_data:
+                banner = obj.result_data['banner']
+                preview = banner[:50] + "..." if len(banner) > 50 else banner
+                return format_html('<span title="{}">{}</span>', banner, preview)
+            elif obj.job_type == 'domain_enum' and 'domains' in obj.result_data:
+                domains = obj.result_data['domains']
+                preview = f"{len(domains)} domains" if domains else "No domains"
+                return preview
+            elif obj.job_type == 'ssl_cert' and 'subject' in obj.result_data:
+                subject = obj.result_data['subject']
+                cn = subject.get('commonName', 'Unknown')
+                preview = cn[:50] + "..." if len(cn) > 50 else cn
+                return preview
+            else:
+                preview = str(obj.result_data)[:50] + "..." if len(str(obj.result_data)) > 50 else str(obj.result_data)
+                return preview
+        return "-"
+    get_result_preview.short_description = "Result Preview"
+    
+    actions = ['mark_queued', 'mark_cancelled', 'retry_failed']
+    
+    def mark_queued(self, request, queryset):
+        count = queryset.filter(status='pending').update(status='queued')
+        self.message_user(request, f"Marked {count} jobs as queued.")
+    mark_queued.short_description = "Mark selected jobs as queued"
+    
+    def mark_cancelled(self, request, queryset):
+        count = queryset.filter(status__in=['pending', 'queued', 'running']).update(status='cancelled')
+        self.message_user(request, f"Cancelled {count} jobs.")
+    mark_cancelled.short_description = "Cancel selected jobs"
+    
+    def retry_failed(self, request, queryset):
+        count = 0
+        for job in queryset.filter(status='failed'):
+            if job.can_retry():
+                job.status = 'pending'
+                job.retry_count += 1
+                job.error_message = ''
+                job.save()
+                count += 1
+        self.message_user(request, f"Retried {count} failed jobs.")
+    retry_failed.short_description = "Retry selected failed jobs"

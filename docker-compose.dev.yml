@@ -21,7 +21,7 @@ services:
     volumes:
       - ./backend:/app 
       - ./static:/static
-      - ./logs:/var/log/app
+      - logs:/var/log/app
     environment:
       - DJANGO_DEBUG=True
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -77,10 +77,6 @@ services:
       - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
       - DJANGO_DB_HOST=${DJANGO_DB_HOST}
       - DJANGO_DB_PORT=${DJANGO_DB_PORT}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_DB=${REDIS_DB}
-      - MASSCAN_RATE=${MASSCAN_RATE}
     depends_on:
       - db
       - redis
@@ -88,6 +84,27 @@ services:
     cap_add:
       - NET_ADMIN
     command: ["python3", "manage.py", "run_scanner_service", "--max-concurrent", "2", "--job-types", "masscan"]
+
+  ancillary-processor:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.ancillary-processor
+    volumes:
+      - ./backend:/app 
+      - logs:/var/log/app
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=True
+      - DJANGO_DB_NAME=${DJANGO_DB_NAME}
+      - DJANGO_DB_USER=${DJANGO_DB_USER}
+      - DJANGO_DB_PASSWORD=${DJANGO_DB_PASSWORD}
+      - DJANGO_DB_HOST=${DJANGO_DB_HOST}
+      - DJANGO_DB_PORT=${DJANGO_DB_PORT}
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    command: ["python3", "manage.py", "run_ancillary_processor", "--max-jobs", "20", "--interval", "3"]
 
   db:
     build:

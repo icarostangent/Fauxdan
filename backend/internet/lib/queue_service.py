@@ -238,10 +238,14 @@ class QueueService:
         """Run masscan command and process output with timeout"""
         from asgiref.sync import sync_to_async
         import re
+        from .banner_grabber import get_banner_grabber
+        
+        # Store discovered ports for banner grabbing
+        discovered_ports = []
         
         def process_discovery(host_ip, port_number, proto, current_time, scan):
-            """Process a discovered port"""
-            from internet.models import Host, Port
+            """Process a discovered port and queue ancillary jobs"""
+            from internet.models import Host, Port, AncillaryJob
             
             # Get or create host
             host_obj, host_created = Host.objects.get_or_create(ip=host_ip)
@@ -259,9 +263,9 @@ class QueueService:
                 existing_port.last_seen = current_time
                 existing_port.status = 'open'
                 existing_port.save()
-                return f'Updated existing port: {host_ip}:{port_number}/{proto}', host_created
+                port_obj = existing_port
             else:
-                Port.objects.create(
+                port_obj = Port.objects.create(
                     scan=scan,
                     port_number=port_number,
                     proto=proto,
@@ -269,7 +273,50 @@ class QueueService:
                     last_seen=current_time,
                     status='open'
                 )
-                return f'New port discovered: {host_ip}:{port_number}/{proto}', host_created
+            
+            # Queue banner grab job for this port
+            banner_job = AncillaryJob.objects.create(
+                job_type='banner_grab',
+                host_ip=host_ip,
+                port_number=port_number,
+                protocol=proto,
+                port=port_obj,
+                host=host_obj,
+                scanner_job=job,
+                status='pending',
+                priority=0
+            )
+            
+            # Queue domain enumeration job for this host (only once per host)
+            if host_created or not AncillaryJob.objects.filter(
+                host=host_obj, 
+                job_type='domain_enum', 
+                status__in=['pending', 'running', 'completed']
+            ).exists():
+                domain_job = AncillaryJob.objects.create(
+                    job_type='domain_enum',
+                    host_ip=host_ip,
+                    host=host_obj,
+                    scanner_job=job,
+                    status='pending',
+                    priority=1  # Lower priority than banner grab
+                )
+            
+            # Queue SSL certificate job for HTTPS ports
+            if port_number in [443, 8443, 9443, 10443]:
+                ssl_job = AncillaryJob.objects.create(
+                    job_type='ssl_cert',
+                    host_ip=host_ip,
+                    port_number=port_number,
+                    protocol=proto,
+                    port=port_obj,
+                    host=host_obj,
+                    scanner_job=job,
+                    status='pending',
+                    priority=2  # Lower priority than banner grab
+                )
+            
+            return f'Queued ancillary jobs for {host_ip}:{port_number}/{proto}', host_created, port_obj
         
         async def parse_stdout(stdout_line):
             """Parse masscan output"""
@@ -281,7 +328,7 @@ class QueueService:
                 host_ip = match.group(3)
                 current_time = timezone.now()
                 
-                result, host_created = await sync_to_async(process_discovery)(
+                result, host_created, port_obj = await sync_to_async(process_discovery)(
                     host_ip, port_number, proto, current_time, job.scan
                 )
                 
@@ -323,6 +370,9 @@ class QueueService:
             
             if process.returncode != 0:
                 raise Exception(f"Masscan failed with return code {process.returncode}")
+            
+            # Banner grab jobs have been queued during port discovery
+            logger.info("Masscan completed. Banner grab jobs have been queued for processing.")
                 
         except asyncio.TimeoutError:
             logger.warning(f'Masscan scan timed out after {timeout} seconds. Terminating process...')
@@ -341,6 +391,163 @@ class QueueService:
             stderr_task.cancel()
             
             raise Exception(f"Masscan scan timed out after {timeout} seconds")
+    
+    async def _process_ancillary_job(self, job: 'AncillaryJob'):
+        """Process a single ancillary job (banner grab, domain enum, SSL cert, etc.)"""
+        from asgiref.sync import sync_to_async
+        
+        try:
+            # Mark job as started
+            await sync_to_async(job.mark_started)()
+            
+            # Process based on job type
+            if job.job_type == 'banner_grab':
+                result_data = await self._process_banner_grab(job)
+            elif job.job_type == 'domain_enum':
+                result_data = await self._process_domain_enum(job)
+            elif job.job_type == 'ssl_cert':
+                result_data = await self._process_ssl_cert(job)
+            else:
+                logger.warning(f'Unknown job type: {job.job_type}')
+                result_data = {'error': f'Unknown job type: {job.job_type}'}
+            
+            # Mark job as completed
+            await sync_to_async(job.mark_completed)(result_data)
+            logger.info(f'Completed {job.job_type} job for {job.host_ip}')
+                
+        except Exception as e:
+            error_msg = str(e)
+            await sync_to_async(job.mark_failed)(error_msg)
+            logger.error(f'{job.job_type} job failed for {job.host_ip}: {error_msg}')
+    
+    async def _process_banner_grab(self, job: 'AncillaryJob') -> dict:
+        """Process banner grab job"""
+        from .banner_grabber import get_banner_grabber
+        from asgiref.sync import sync_to_async
+        
+        banner_grabber = get_banner_grabber()
+        
+        # Grab banner
+        banner = await banner_grabber.grab_banner(
+            job.host_ip, 
+            job.port_number, 
+            job.protocol
+        )
+        
+        result_data = {'banner': banner or ''}
+        
+        if banner and job.port:
+            # Update port with banner
+            def update_port_banner():
+                job.port.banner = banner
+                job.port.save(update_fields=['banner'])
+            
+            await sync_to_async(update_port_banner)()
+        
+        return result_data
+    
+    async def _process_domain_enum(self, job: 'AncillaryJob') -> dict:
+        """Process domain enumeration job"""
+        from .domain_enumerator import get_domain_enumerator
+        from asgiref.sync import sync_to_async
+        from internet.models import Domain
+        
+        domain_enumerator = get_domain_enumerator()
+        
+        # Enumerate domains
+        domains = await domain_enumerator.enumerate_domains(job.host_ip)
+        
+        result_data = {'domains': domains}
+        
+        if domains and job.host:
+            # Save domains to database using sync_to_async
+            def save_domains():
+                for domain_name in domains:
+                    domain, created = Domain.objects.get_or_create(
+                        name=domain_name,
+                        defaults={'host': job.host}
+                    )
+                    if not created and domain.host != job.host:
+                        domain.host = job.host
+                        domain.save()
+            
+            await sync_to_async(save_domains)()
+        
+        return result_data
+    
+    async def _process_ssl_cert(self, job: 'AncillaryJob') -> dict:
+        """Process SSL certificate grab job"""
+        from .ssl_cert_grabber import get_ssl_cert_grabber
+        from asgiref.sync import sync_to_async
+        from internet.models import SSLCertificate
+        
+        ssl_cert_grabber = get_ssl_cert_grabber()
+        
+        # Grab SSL certificate
+        port = job.port_number or 443
+        cert_data = await ssl_cert_grabber.grab_certificate(job.host_ip, port)
+        
+        result_data = {'certificate': cert_data} if cert_data else {'certificate': None}
+        
+        if cert_data and job.host:
+            # Save SSL certificate to database
+            def save_ssl_cert():
+                ssl_cert, created = SSLCertificate.objects.get_or_create(
+                    host=job.host,
+                    port=port,
+                    defaults={
+                        'subject': cert_data.get('subject', {}),
+                        'issuer': cert_data.get('issuer', {}),
+                        'not_before': cert_data.get('not_before'),
+                        'not_after': cert_data.get('not_after'),
+                        'fingerprint_sha1': cert_data.get('fingerprint_sha1', ''),
+                        'fingerprint_sha256': cert_data.get('fingerprint_sha256', ''),
+                        'raw_certificate': cert_data.get('raw_certificate', ''),
+                    }
+                )
+                if not created:
+                    # Update existing certificate
+                    ssl_cert.subject = cert_data.get('subject', {})
+                    ssl_cert.issuer = cert_data.get('issuer', {})
+                    ssl_cert.not_before = cert_data.get('not_before')
+                    ssl_cert.not_after = cert_data.get('not_after')
+                    ssl_cert.fingerprint_sha1 = cert_data.get('fingerprint_sha1', '')
+                    ssl_cert.fingerprint_sha256 = cert_data.get('fingerprint_sha256', '')
+                    ssl_cert.raw_certificate = cert_data.get('raw_certificate', '')
+                    ssl_cert.save()
+            
+            await sync_to_async(save_ssl_cert)()
+        
+        return result_data
+    
+    async def process_ancillary_jobs(self, max_jobs: int = 10):
+        """Process pending ancillary jobs (banner grab, domain enum, SSL cert, etc.)"""
+        from asgiref.sync import sync_to_async
+        from internet.models import AncillaryJob
+        
+        def get_pending_jobs():
+            return list(AncillaryJob.objects.filter(
+                status='pending'
+            ).order_by('-priority', 'created_at')[:max_jobs])
+        
+        # Get pending jobs
+        pending_jobs = await sync_to_async(get_pending_jobs)()
+        
+        if not pending_jobs:
+            return
+        
+        logger.info(f"Processing {len(pending_jobs)} ancillary jobs...")
+        
+        # Process jobs concurrently
+        tasks = []
+        for job in pending_jobs:
+            task = self._process_ancillary_job(job)
+            tasks.append(task)
+        
+        # Wait for all jobs to complete
+        await asyncio.gather(*tasks, return_exceptions=True)
+        
+        logger.info(f"Completed processing {len(pending_jobs)} ancillary jobs.")
     
     async def _process_nmap_job(self, job: ScannerJob):
         """Process an nmap job (placeholder)"""

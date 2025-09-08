@@ -65,6 +65,7 @@ class Port(models.Model):
             models.Index(fields=['host']),  # For prefetch performance
             models.Index(fields=['port_number']),  # For port number searches
             models.Index(fields=['proto']),  # For protocol searches
+            models.Index(fields=['banner']),  # For banner searches
         ]
 
 
@@ -304,3 +305,106 @@ class JobWorker(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['last_heartbeat']),
         ]
+
+
+class AncillaryJob(models.Model):
+    """Represents an ancillary job (banner grab, domain enum, SSL cert, etc.)"""
+    
+    JOB_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('queued', 'Queued'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+        ('retrying', 'Retrying'),
+    ]
+    
+    JOB_TYPE_CHOICES = [
+        ('banner_grab', 'Banner Grab'),
+        ('domain_enum', 'Domain Enumeration'),
+        ('ssl_cert', 'SSL Certificate'),
+        ('service_detection', 'Service Detection'),
+        ('vulnerability_scan', 'Vulnerability Scan'),
+    ]
+    
+    job_uuid = models.UUIDField(unique=True, default=uuid.uuid4)
+    job_type = models.CharField(max_length=20, choices=JOB_TYPE_CHOICES, default='banner_grab')
+    status = models.CharField(max_length=20, choices=JOB_STATUS_CHOICES, default='pending')
+    priority = models.PositiveIntegerField(default=0, help_text="Higher number = higher priority")
+    
+    # Target information
+    host_ip = models.CharField(max_length=255)
+    port_number = models.PositiveIntegerField(null=True, blank=True)  # Optional for domain enum jobs
+    protocol = models.CharField(max_length=3, default='tcp')
+    
+    # Related objects
+    port = models.ForeignKey(Port, on_delete=models.CASCADE, related_name='ancillary_jobs', null=True, blank=True)
+    host = models.ForeignKey(Host, on_delete=models.CASCADE, related_name='ancillary_jobs', null=True, blank=True)
+    scanner_job = models.ForeignKey(ScannerJob, on_delete=models.CASCADE, related_name='ancillary_jobs', null=True, blank=True)
+    
+    # Worker assignment
+    assigned_worker = models.ForeignKey(JobWorker, on_delete=models.SET_NULL, null=True, blank=True, related_name='ancillary_jobs')
+    
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Results (flexible JSON field for different job types)
+    result_data = models.JSONField(default=dict, blank=True, help_text="Job-specific result data")
+    error_message = models.TextField(blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
+    max_retries = models.PositiveIntegerField(default=3)
+    
+    # Job metadata
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    def __str__(self):
+        port_str = f":{self.port_number}" if self.port_number else ""
+        return f"{self.get_job_type_display()} {self.host_ip}{port_str} ({self.status})"
+    
+    def can_retry(self):
+        """Check if job can be retried"""
+        return self.retry_count < self.max_retries and self.status in ['failed', 'cancelled']
+    
+    def mark_started(self):
+        """Mark job as started"""
+        self.status = 'running'
+        self.started_at = timezone.now()
+        self.save(update_fields=['status', 'started_at'])
+    
+    def mark_completed(self, result_data=None):
+        """Mark job as completed"""
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        if result_data:
+            self.result_data = result_data
+        self.save(update_fields=['status', 'completed_at', 'result_data'])
+    
+    def mark_failed(self, error_message=""):
+        """Mark job as failed"""
+        self.status = 'failed'
+        self.completed_at = timezone.now()
+        self.error_message = error_message
+        self.save(update_fields=['status', 'completed_at', 'error_message'])
+    
+    def mark_cancelled(self):
+        """Mark job as cancelled"""
+        self.status = 'cancelled'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at'])
+    
+    class Meta:
+        ordering = ['-priority', 'created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['job_type']),
+            models.Index(fields=['host_ip', 'port_number']),
+            models.Index(fields=['assigned_worker']),
+            models.Index(fields=['scanner_job']),
+        ]
+
+
+# Keep the old BannerGrabJob for backward compatibility
+BannerGrabJob = AncillaryJob
