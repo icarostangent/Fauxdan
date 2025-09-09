@@ -47,7 +47,7 @@
           </div>
           <div class="port-meta">
             <span class="port-status" :class="port.status">{{ port.status }}</span>
-            <span v-if="isSSLPort(port.port_number)" class="ssl-indicator">🔒</span>
+            <span v-if="isSSLPort(port.port_number, port.banner)" class="ssl-indicator">🔒</span>
           </div>
         </div>
         <div v-if="host.ports.length > 6" class="more-ports">
@@ -118,54 +118,67 @@ export default defineComponent({
       }
     }
 
-    // Service detection based on port number and banner
+    // Service detection based on banner content only
     const getServiceName = (portNumber: number, banner: string | null) => {
-      const serviceMap: { [key: number]: string } = {
-        21: 'FTP',
-        22: 'SSH',
-        23: 'Telnet',
-        25: 'SMTP',
-        53: 'DNS',
-        80: 'HTTP',
-        110: 'POP3',
-        143: 'IMAP',
-        443: 'HTTPS',
-        993: 'IMAPS',
-        995: 'POP3S',
-        1433: 'MSSQL',
-        3306: 'MySQL',
-        3389: 'RDP',
-        5432: 'PostgreSQL',
-        5900: 'VNC',
-        6379: 'Redis',
-        27017: 'MongoDB',
-        8080: 'HTTP-Alt',
-        8443: 'HTTPS-Alt'
-      }
-      
-      if (serviceMap[portNumber]) {
-        return serviceMap[portNumber]
-      }
-      
-      // Try to detect from banner
+      // Only detect service from banner content, not port number
       if (banner) {
         const bannerLower = banner.toLowerCase()
+        
+        // Web servers
         if (bannerLower.includes('apache')) return 'Apache'
         if (bannerLower.includes('nginx')) return 'Nginx'
         if (bannerLower.includes('iis')) return 'IIS'
+        if (bannerLower.includes('lighttpd')) return 'Lighttpd'
+        if (bannerLower.includes('caddy')) return 'Caddy'
+        
+        // SSH services
         if (bannerLower.includes('ssh')) return 'SSH'
+        if (bannerLower.includes('openssh')) return 'OpenSSH'
+        
+        // FTP services
         if (bannerLower.includes('ftp')) return 'FTP'
+        if (bannerLower.includes('vsftpd')) return 'vsftpd'
+        if (bannerLower.includes('proftpd')) return 'ProFTPD'
+        
+        // Mail services
         if (bannerLower.includes('smtp')) return 'SMTP'
+        if (bannerLower.includes('postfix')) return 'Postfix'
+        if (bannerLower.includes('sendmail')) return 'Sendmail'
+        if (bannerLower.includes('exim')) return 'Exim'
+        
+        // HTTP/HTTPS services
         if (bannerLower.includes('http')) return 'HTTP'
+        if (bannerLower.includes('https')) return 'HTTPS'
+        
+        // Database services
+        if (bannerLower.includes('mysql')) return 'MySQL'
+        if (bannerLower.includes('postgresql')) return 'PostgreSQL'
+        if (bannerLower.includes('mssql')) return 'MSSQL'
+        if (bannerLower.includes('redis')) return 'Redis'
+        if (bannerLower.includes('mongodb')) return 'MongoDB'
+        
+        // Other services
+        if (bannerLower.includes('telnet')) return 'Telnet'
+        if (bannerLower.includes('dns')) return 'DNS'
+        if (bannerLower.includes('rdp')) return 'RDP'
+        if (bannerLower.includes('vnc')) return 'VNC'
+        if (bannerLower.includes('imap')) return 'IMAP'
+        if (bannerLower.includes('pop3')) return 'POP3'
       }
       
       return 'Unknown'
     }
 
-    // Check if port is commonly used for SSL/TLS
-    const isSSLPort = (portNumber: number) => {
-      const sslPorts = [443, 993, 995, 465, 587, 8443, 9443]
-      return sslPorts.includes(portNumber)
+    // Check if port has SSL/TLS based on banner content
+    const isSSLPort = (portNumber: number, banner: string | null) => {
+      if (banner) {
+        const bannerLower = banner.toLowerCase()
+        return bannerLower.includes('ssl') || 
+               bannerLower.includes('tls') || 
+               bannerLower.includes('https') ||
+               bannerLower.includes('starttls')
+      }
+      return false
     }
 
     // Check if host has valid SSL certificates

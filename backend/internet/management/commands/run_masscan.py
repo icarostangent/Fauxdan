@@ -37,6 +37,11 @@ class Command(BaseCommand):
             default=[],
             help='Comma-separated ports to scan (e.g. "80,443,8080")'
         )
+        parser.add_argument(
+            '--all-ports',
+            action='store_true',
+            help='Scan all TCP ports (equivalent to masscan -p-). Overrides --ports.'
+        )
         
         # Scan type options
         parser.add_argument(
@@ -53,6 +58,11 @@ class Command(BaseCommand):
             '--udp', 
             action='store_true', 
             help='UDP packets'
+        )
+        parser.add_argument(
+            '--tcp-udp',
+            action='store_true',
+            help='Scan both TCP and UDP simultaneously'
         )
         parser.add_argument(
             '--use_proxychains', 
@@ -112,9 +122,11 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         target = kwargs['target']
         ports = kwargs['ports']
+        all_ports = kwargs['all_ports']
         syn = kwargs['syn']
         tcp = kwargs['tcp']
         udp = kwargs['udp']
+        tcp_udp = kwargs['tcp_udp']
         use_proxychains = kwargs['use_proxychains']
         resume = kwargs['resume']
         rate = kwargs['rate']
@@ -127,25 +139,29 @@ class Command(BaseCommand):
 
         if queue_mode:
             self._handle_queued_mode(
-                target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout,
+                target, ports, all_ports, syn, tcp, udp, tcp_udp, use_proxychains, resume, rate, timeout,
                 queue_name, priority, schedule, user_id
             )
         else:
             self._handle_direct_mode(
-                target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout
+                target, ports, all_ports, syn, tcp, udp, tcp_udp, use_proxychains, resume, rate, timeout
             )
 
-    def _handle_queued_mode(self, target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout,
+    def _handle_queued_mode(self, target, ports, all_ports, syn, tcp, udp, tcp_udp, use_proxychains, resume, rate, timeout,
                            queue_name, priority, schedule, user_id):
         """Handle queued execution mode"""
         # Build scan options
         scan_options = {}
+        if all_ports:
+            scan_options['all_ports'] = True
         if syn:
             scan_options['syn'] = True
         if tcp:
             scan_options['tcp'] = True
         if udp:
             scan_options['udp'] = True
+        if tcp_udp:
+            scan_options['tcp_udp'] = True
         if use_proxychains:
             scan_options['use_proxychains'] = True
         if rate:
@@ -195,7 +211,7 @@ class Command(BaseCommand):
                     f'Successfully queued masscan job:\n'
                     f'  Job UUID: {job.job_uuid}\n'
                     f'  Target: {target}\n'
-                    f'  Ports: {ports if ports else "default"}\n'
+                    f'  Ports: {"all (1-65535)" if all_ports else (ports if ports else "default")}\n'
                     f'  Queue: {queue_name}\n'
                     f'  Priority: {priority}\n'
                     f'  Status: {job.status}\n'
@@ -216,7 +232,7 @@ class Command(BaseCommand):
                 self.style.ERROR(f'Failed to queue job: {str(e)}')
             )
 
-    def _handle_direct_mode(self, target, ports, syn, tcp, udp, use_proxychains, resume, rate, timeout):
+    def _handle_direct_mode(self, target, ports, all_ports, syn, tcp, udp, tcp_udp, use_proxychains, resume, rate, timeout):
         """Handle direct execution mode"""
         # Configure masscan
         self.masscan.set_target(target)
@@ -226,15 +242,21 @@ class Command(BaseCommand):
             self.masscan.set_tcp()
         if udp:
             self.masscan.set_udp()
+        if tcp_udp:
+            # Ensure both modes are enabled
+            self.masscan.set_tcp(True)
+            self.masscan.set_udp(True)
         if use_proxychains:
             self.proxychains.set_config()
         if resume:
             self.masscan.set_resume()
+        if all_ports:
+            self.masscan.set_all_ports()
         
         if rate:
             self.masscan.set_rate(rate)
         
-        if ports:
+        if ports and not all_ports:
             self.masscan.set_ports(ports)
 
         # Create scan record

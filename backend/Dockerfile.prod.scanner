@@ -5,7 +5,7 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get -y update && apt-get -y upgrade && \
-    apt-get -y install build-essential libpcap0.8 dnsutils python3-pip
+    apt-get -y install build-essential libpcap0.8 dnsutils python3-pip nmap
 
 RUN apt-get -y install git && \
     git clone https://github.com/robertdavidgraham/masscan.git &&\

@@ -204,6 +204,9 @@ REDIS_BATCH_SIZE = os.getenv('REDIS_BATCH_SIZE', 1000)
 
 MASSCAN_RATE = os.getenv('MASSCAN_RATE', 7500)
 
+# Ancillary job processing batch size
+ANCILLARY_BATCH_SIZE = int(os.getenv('ANCILLARY_BATCH_SIZE', '5'))
+
 # Admin Interface Configuration
 # Remove the jet configuration since we're not using it
 # JET_DEFAULT_THEME = 'light-gray'

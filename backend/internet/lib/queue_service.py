@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 from django.conf import settings
 from django.db import transaction, models
 from django.utils import timezone
-from internet.models import ScannerJob, JobQueue, JobWorker, Scan
+from internet.models import ScannerJob, JobQueue, JobWorker, Scan, AncillaryJob
 
 logger = logging.getLogger(__name__)
 
@@ -103,18 +103,18 @@ class QueueService:
         while self.running:
             try:
                 # Check if we can accept more jobs
-                if len(self.current_jobs) < self.worker.max_concurrent_jobs:
-                    # Try to get a scanner job first
+                available_slots = max(0, self.worker.max_concurrent_jobs - len(self.current_jobs))
+                if available_slots > 0:
+                    # Prefer one scanner job if available
                     scanner_job = await self._get_next_job()
                     if scanner_job:
-                        # Process scanner job asynchronously
                         asyncio.create_task(self._process_job(scanner_job))
-                    else:
-                        # If no scanner job, try to get an ancillary job
-                        ancillary_job = await self._get_next_ancillary_job()
-                        if ancillary_job:
-                            # Process ancillary job asynchronously
-                            asyncio.create_task(self._process_ancillary_job(ancillary_job))
+                        available_slots -= 1
+                    # Fill remaining with ancillary jobs in batches
+                    if available_slots > 0:
+                        ancillary_jobs = await self._get_next_ancillary_jobs(available_slots)
+                        for aj in ancillary_jobs:
+                            asyncio.create_task(self._process_post_discovery_analysis_job(aj))
                 
                 await asyncio.sleep(1)  # Check for jobs every second
             except Exception as e:
@@ -160,35 +160,59 @@ class QueueService:
         
         return await sync_to_async(_get_job)()
     
-    async def _get_next_ancillary_job(self) -> Optional['AncillaryJob']:
-        """Get the next available ancillary job"""
+    async def _get_next_ancillary_jobs(self, max_jobs: int) -> List['AncillaryJob']:
+        """Get up to max_jobs ancillary jobs using priority and type ordering"""
         from asgiref.sync import sync_to_async
         from internet.models import AncillaryJob
-        
-        def _get_ancillary_job():
+        from django.conf import settings
+
+        def _get_batch():
             # Get the next pending ancillary job that matches our supported job types
-            # Filter by job types that are supported by this worker
+            # Prefer ssl_cert, then banner_grab, then domain_enum to avoid starvation
             supported_ancillary_types = [jt for jt in self.worker.supported_job_types 
-                                       if jt in ['banner_grab', 'ssl_cert', 'domain_enum', 'service_detection', 'vulnerability_scan']]
-            
+                                       if jt in ['ssl_cert', 'banner_grab', 'domain_enum', 'service_detection', 'vulnerability_scan']]
+
             if not supported_ancillary_types:
-                return None
-                
-            job = AncillaryJob.objects.filter(
-                status='pending',
-                job_type__in=supported_ancillary_types
-            ).order_by('-priority', 'created_at').first()
-            
-            if job:
-                # Assign job to this worker
-                job.assigned_worker = self.worker
-                job.status = 'running'
-                job.save()
-                return job
-            
-            return None
+                return []
+
+            # Priority order within supported types
+            type_priority = ['ssl_cert', 'banner_grab', 'domain_enum']
+            batch_size = min(max_jobs, getattr(settings, 'ANCILLARY_BATCH_SIZE', 5))
+            selected: List[AncillaryJob] = []
+
+            # Pull by type priority first
+            for jt in type_priority:
+                if len(selected) >= batch_size:
+                    break
+                if jt not in supported_ancillary_types:
+                    continue
+                needed = batch_size - len(selected)
+                jobs = list(
+                    AncillaryJob.objects.filter(status='pending', job_type=jt)
+                    .order_by('-priority', 'created_at')[:needed]
+                )
+                for job in jobs:
+                    job.assigned_worker = self.worker
+                    job.status = 'running'
+                    job.save()
+                selected.extend(jobs)
+
+            # Fallback fill from any supported types
+            if len(selected) < batch_size:
+                needed = batch_size - len(selected)
+                extras = list(
+                    AncillaryJob.objects.filter(status='pending', job_type__in=supported_ancillary_types)
+                    .order_by('-priority', 'created_at')[:needed]
+                )
+                for job in extras:
+                    job.assigned_worker = self.worker
+                    job.status = 'running'
+                    job.save()
+                selected.extend(extras)
+
+            return selected
         
-        return await sync_to_async(_get_ancillary_job)()
+        return await sync_to_async(_get_batch)()
     
     async def _process_job(self, job: ScannerJob):
         """Process a single job"""
@@ -243,6 +267,9 @@ class QueueService:
             masscan.set_tcp()
         if scan_options.get('udp', False):
             masscan.set_udp()
+        if scan_options.get('tcp_udp', False):
+            masscan.set_tcp(True)
+            masscan.set_udp(True)
         if scan_options.get('use_proxychains', False):
             proxychains = ProxyChainsConfigurator()
             proxychains.set_config()
@@ -252,6 +279,8 @@ class QueueService:
         
         if scan_options.get('resume', False):
             masscan.set_resume()
+        if scan_options.get('all_ports', False):
+            masscan.set_all_ports(True)
         
         if job.ports:
             masscan.set_ports(job.ports)
@@ -429,8 +458,8 @@ class QueueService:
             
             raise Exception(f"Masscan scan timed out after {timeout} seconds")
     
-    async def _process_ancillary_job(self, job: 'AncillaryJob'):
-        """Process a single ancillary job (banner grab, domain enum, SSL cert, etc.)"""
+    async def _process_post_discovery_analysis_job(self, job: 'AncillaryJob'):
+        """Process a single post-discovery analysis job (banner grab, domain enum, SSL cert, etc.)"""
         from asgiref.sync import sync_to_async
         
         job_id = f"ancillary_{job.job_uuid}"
@@ -451,23 +480,43 @@ class QueueService:
                 result_data = {'error': f'Unknown job type: {job.job_type}'}
             
             # Mark job as completed
-            await sync_to_async(job.mark_completed)(result_data)
+            def _mark_completed():
+                from django.db import transaction
+                with transaction.atomic():
+                    job.status = 'completed'
+                    job.completed_at = timezone.now()
+                    if result_data:
+                        job.result_data = result_data
+                    job.save(update_fields=['status', 'completed_at', 'result_data'])
+            
+            await sync_to_async(_mark_completed)()
             logger.info(f"Completed ancillary job {job_id}")
             
         except Exception as e:
             logger.error(f"Ancillary job {job_id} failed: {e}")
-            await sync_to_async(job.mark_failed)(str(e))
+            
+            def _mark_failed():
+                from django.db import transaction
+                with transaction.atomic():
+                    job.status = 'failed'
+                    job.completed_at = timezone.now()
+                    job.error_message = str(e)
+                    job.save(update_fields=['status', 'completed_at', 'error_message'])
+            
+            await sync_to_async(_mark_failed)()
         finally:
             # Clean up
             if job_id in self.current_jobs:
                 del self.current_jobs[job_id]
     
     async def _process_banner_grab(self, job: 'AncillaryJob') -> dict:
-        """Process banner grab job"""
+        """Process banner grab job with intelligent analysis and follow-up queuing"""
         from .banner_grabber import get_banner_grabber
+        from .banner_analyzer import BannerAnalyzer
         from asgiref.sync import sync_to_async
         
         banner_grabber = get_banner_grabber()
+        banner_analyzer = BannerAnalyzer()
         
         # Grab banner
         banner = await banner_grabber.grab_banner(
@@ -478,15 +527,136 @@ class QueueService:
         
         result_data = {'banner': banner or ''}
         
-        if banner and job.port:
+        if banner and job.port_id:
             # Update port with banner
             def update_port_banner():
-                job.port.banner = banner
-                job.port.save(update_fields=['banner'])
+                try:
+                    from internet.models import Port
+                    # Avoid relation access in async context by using the FK id
+                    Port.objects.filter(id=job.port_id).update(banner=banner)
+                except Exception as e:
+                    logger.warning(f"Failed to update port banner: {e}")
             
             await sync_to_async(update_port_banner)()
+            
+            # Analyze banner for intelligent follow-up actions
+            detections = banner_analyzer.analyze_banner(banner, job.port_number)
+            
+            # Queue SSL certificate grab if appropriate
+            if banner_analyzer.should_queue_ssl_cert(detections):
+                await self._queue_ssl_cert_job(job, detections)
+            
+            # Queue domain enumeration if appropriate
+            if banner_analyzer.should_queue_domain_enum(detections):
+                await self._queue_domain_enum_job(job, detections)
+            
+            # Add detection results to the banner grab result
+            result_data['detections'] = [
+                {
+                    'service_type': detection.service_type.value,
+                    'confidence': detection.confidence,
+                    'version': detection.version,
+                    'additional_info': detection.additional_info
+                }
+                for detection in detections
+            ]
         
         return result_data
+    
+    async def _queue_ssl_cert_job(self, banner_job: 'AncillaryJob', detections: List) -> None:
+        """Queue SSL certificate grab job based on banner analysis"""
+        from asgiref.sync import sync_to_async
+        from internet.models import AncillaryJob
+        
+        # Check if SSL cert job already exists for this host:port
+        def check_existing_job():
+            return AncillaryJob.objects.filter(
+                job_type='ssl_cert',
+                host_ip=banner_job.host_ip,
+                port_number=banner_job.port_number,
+                status__in=['pending', 'running', 'queued']
+            ).exists()
+        
+        existing = await sync_to_async(check_existing_job)()
+        if existing:
+            return
+        
+        # Determine priority based on detection confidence
+        priority = 0
+        for detection in detections:
+            if detection.service_type.value == 'https':
+                priority = max(priority, int(detection.confidence * 10))
+        
+        # Create SSL cert job
+        def create_ssl_job():
+            try:
+                return AncillaryJob.objects.create(
+                    job_type='ssl_cert',
+                    host_ip=banner_job.host_ip,
+                    port_number=banner_job.port_number,
+                    protocol=banner_job.protocol,
+                    # Use *_id fields to avoid relation resolution in async context
+                    port_id=banner_job.port_id,
+                    host_id=banner_job.host_id,
+                    scanner_job_id=banner_job.scanner_job_id,
+                    status='pending',
+                    priority=priority,
+                    metadata={'triggered_by': 'banner_analysis'}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create SSL cert job: {e}")
+                return None
+        
+        result = await sync_to_async(create_ssl_job)()
+        if result:
+            logger.info(f"Queued SSL cert job for {banner_job.host_ip}:{banner_job.port_number}")
+    
+    async def _queue_domain_enum_job(self, banner_job: 'AncillaryJob', detections: List) -> None:
+        """Queue domain enumeration job based on banner analysis"""
+        from asgiref.sync import sync_to_async
+        from internet.models import AncillaryJob
+        
+        # Check if domain enum job already exists for this host
+        def check_existing_job():
+            return AncillaryJob.objects.filter(
+                job_type='domain_enum',
+                host_ip=banner_job.host_ip,
+                status__in=['pending', 'running', 'queued']
+            ).exists()
+        
+        existing = await sync_to_async(check_existing_job)()
+        if existing:
+            return
+        
+        # Determine priority based on detection confidence
+        priority = 0
+        for detection in detections:
+            if detection.service_type.value in ['http', 'https']:
+                priority = max(priority, int(detection.confidence * 10))
+        
+        # Create domain enum job
+        def create_domain_job():
+            try:
+                return AncillaryJob.objects.create(
+                    job_type='domain_enum',
+                    host_ip=banner_job.host_ip,
+                    port_number=None,  # Domain enum is host-level, not port-specific
+                    protocol='tcp',
+                    port=None,
+                    # Use *_id fields to avoid relation resolution in async context
+                    host_id=banner_job.host_id,
+                    scanner_job_id=banner_job.scanner_job_id,
+                    status='pending',
+                    priority=priority,
+                    metadata={'triggered_by': 'banner_analysis'}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create domain enum job: {e}")
+                return None
+        
+        result = await sync_to_async(create_domain_job)()
+        if result:
+            logger.info(f"Queued domain enum job for {banner_job.host_ip}")
     
     async def _process_domain_enum(self, job: 'AncillaryJob') -> dict:
         """Process domain enumeration job"""
@@ -501,16 +671,16 @@ class QueueService:
         
         result_data = {'domains': domains}
         
-        if domains and job.host:
+        if domains and job.host_id:
             # Save domains to database using sync_to_async
             def save_domains():
                 for domain_name in domains:
                     domain, created = Domain.objects.get_or_create(
                         name=domain_name,
-                        defaults={'host': job.host}
+                        defaults={'host_id': job.host_id}
                     )
-                    if not created and domain.host != job.host:
-                        domain.host = job.host
+                    if not created and domain.host_id != job.host_id:
+                        domain.host_id = job.host_id
                         domain.save()
             
             await sync_to_async(save_domains)()
@@ -522,44 +692,51 @@ class QueueService:
         from .ssl_cert_grabber import get_ssl_cert_grabber
         from asgiref.sync import sync_to_async
         from internet.models import SSLCertificate
-        
+
         ssl_cert_grabber = get_ssl_cert_grabber()
-        
+
         # Grab SSL certificate
-        port = job.port_number or 443
-        cert_data = await ssl_cert_grabber.grab_certificate(job.host_ip, port)
-        
+        port_number = job.port_number or 443
+        cert_data = await ssl_cert_grabber.grab_certificate(job.host_ip, port_number)
+
         result_data = {'certificate': cert_data} if cert_data else {'certificate': None}
-        
-        if cert_data and job.host:
-            # Save SSL certificate to database
+
+        # Map grabber data -> model fields
+        if cert_data and job.host_id and job.port_id:
             def save_ssl_cert():
+                # The model uses unique fingerprint; prefer sha256 if available else sha1
+                fingerprint = cert_data.get('fingerprint_sha256') or cert_data.get('fingerprint_sha1') or ''
+                pem_hex = cert_data.get('raw_certificate', '')
+
                 ssl_cert, created = SSLCertificate.objects.get_or_create(
-                    host=job.host,
-                    port=port,
+                    fingerprint=fingerprint,
                     defaults={
-                        'subject': cert_data.get('subject', {}),
-                        'issuer': cert_data.get('issuer', {}),
-                        'not_before': cert_data.get('not_before'),
-                        'not_after': cert_data.get('not_after'),
-                        'fingerprint_sha1': cert_data.get('fingerprint_sha1', ''),
-                        'fingerprint_sha256': cert_data.get('fingerprint_sha256', ''),
-                        'raw_certificate': cert_data.get('raw_certificate', ''),
+                        'pem_data': pem_hex,
+                        'subject_cn': (cert_data.get('subject') or {}).get('commonName') or (cert_data.get('subject') or {}).get('CN') or None,
+                        'issuer_cn': (cert_data.get('issuer') or {}).get('commonName') or (cert_data.get('issuer') or {}).get('CN') or None,
+                        'valid_from': cert_data.get('not_before') or '',
+                        'valid_until': cert_data.get('not_after') or '',
+                        'host_id': job.host_id,
+                        'port_id': job.port_id,
                     }
                 )
+
                 if not created:
-                    # Update existing certificate
-                    ssl_cert.subject = cert_data.get('subject', {})
-                    ssl_cert.issuer = cert_data.get('issuer', {})
-                    ssl_cert.not_before = cert_data.get('not_before')
-                    ssl_cert.not_after = cert_data.get('not_after')
-                    ssl_cert.fingerprint_sha1 = cert_data.get('fingerprint_sha1', '')
-                    ssl_cert.fingerprint_sha256 = cert_data.get('fingerprint_sha256', '')
-                    ssl_cert.raw_certificate = cert_data.get('raw_certificate', '')
+                    # Update fields if anything changed
+                    ssl_cert.pem_data = pem_hex or ssl_cert.pem_data
+                    ssl_cert.subject_cn = (cert_data.get('subject') or {}).get('commonName') or ssl_cert.subject_cn
+                    ssl_cert.issuer_cn = (cert_data.get('issuer') or {}).get('commonName') or ssl_cert.issuer_cn
+                    ssl_cert.valid_from = cert_data.get('not_before') or ssl_cert.valid_from
+                    ssl_cert.valid_until = cert_data.get('not_after') or ssl_cert.valid_until
+                    # Ensure FK associations are intact
+                    if ssl_cert.host_id != job.host_id:
+                        ssl_cert.host_id = job.host_id
+                    if ssl_cert.port_id != job.port_id:
+                        ssl_cert.port_id = job.port_id
                     ssl_cert.save()
-            
+
             await sync_to_async(save_ssl_cert)()
-        
+
         return result_data
     
     

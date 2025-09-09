@@ -33,8 +33,9 @@
               <div class="port-header">
                 <div class="port-info">
                   <span class="port-number">{{ port.port_number }}/{{ port.proto }}</span>
-                  <span class="service-badge">{{ getServiceName(port.port_number) }}</span>
+                  <span class="service-badge">{{ getServiceName(port.port_number, port.banner) }}</span>
                   <span class="status-badge">{{ port.status }}</span>
+                  <span v-if="isSSLPort(port.port_number, port.banner)" class="ssl-indicator">🔒</span>
                 </div>
                 <span class="port-timestamp">{{ formatPortDate(port.last_seen) }}</span>
               </div>
@@ -145,22 +146,67 @@ export default defineComponent({
       }
     }
 
-    // Helper function to get service name from port number
-    const getServiceName = (portNumber: number | null): string => {
-      if (!portNumber) return 'Unknown'
-      
-      const commonPorts: { [key: number]: string } = {
-        20: 'FTP-DATA', 21: 'FTP', 22: 'SSH', 23: 'TELNET', 25: 'SMTP', 53: 'DNS',
-        67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 80: 'HTTP', 110: 'POP3', 123: 'NTP',
-        135: 'RPC', 139: 'NetBIOS', 143: 'IMAP', 161: 'SNMP', 162: 'SNMP-TRAP',
-        179: 'BGP', 389: 'LDAP', 443: 'HTTPS', 445: 'SMB', 465: 'SMTPS',
-        514: 'SYSLOG', 515: 'LPD', 587: 'SMTP', 636: 'LDAPS', 993: 'IMAPS',
-        995: 'POP3S', 1433: 'MSSQL', 1521: 'Oracle', 3306: 'MySQL', 3389: 'RDP',
-        5432: 'PostgreSQL', 5900: 'VNC', 6379: 'Redis', 8080: 'HTTP-ALT',
-        8443: 'HTTPS-ALT', 9200: 'Elasticsearch', 27017: 'MongoDB'
+    // Helper function to get service name from banner content (intelligent detection)
+    const getServiceName = (portNumber: number | null, banner: string | null): string => {
+      // Only detect service from banner content, not port number
+      if (banner) {
+        const bannerLower = banner.toLowerCase()
+        
+        // Web servers
+        if (bannerLower.includes('apache')) return 'Apache'
+        if (bannerLower.includes('nginx')) return 'Nginx'
+        if (bannerLower.includes('iis')) return 'IIS'
+        if (bannerLower.includes('lighttpd')) return 'Lighttpd'
+        if (bannerLower.includes('caddy')) return 'Caddy'
+        
+        // SSH services
+        if (bannerLower.includes('ssh')) return 'SSH'
+        if (bannerLower.includes('openssh')) return 'OpenSSH'
+        
+        // FTP services
+        if (bannerLower.includes('ftp')) return 'FTP'
+        if (bannerLower.includes('vsftpd')) return 'vsftpd'
+        if (bannerLower.includes('proftpd')) return 'ProFTPD'
+        
+        // Mail services
+        if (bannerLower.includes('smtp')) return 'SMTP'
+        if (bannerLower.includes('postfix')) return 'Postfix'
+        if (bannerLower.includes('sendmail')) return 'Sendmail'
+        if (bannerLower.includes('exim')) return 'Exim'
+        
+        // HTTP/HTTPS services
+        if (bannerLower.includes('http')) return 'HTTP'
+        if (bannerLower.includes('https')) return 'HTTPS'
+        
+        // Database services
+        if (bannerLower.includes('mysql')) return 'MySQL'
+        if (bannerLower.includes('postgresql')) return 'PostgreSQL'
+        if (bannerLower.includes('mssql')) return 'MSSQL'
+        if (bannerLower.includes('redis')) return 'Redis'
+        if (bannerLower.includes('mongodb')) return 'MongoDB'
+        
+        // Other services
+        if (bannerLower.includes('telnet')) return 'Telnet'
+        if (bannerLower.includes('dns')) return 'DNS'
+        if (bannerLower.includes('rdp')) return 'RDP'
+        if (bannerLower.includes('vnc')) return 'VNC'
+        if (bannerLower.includes('imap')) return 'IMAP'
+        if (bannerLower.includes('pop3')) return 'POP3'
       }
       
-      return commonPorts[portNumber] || `Port ${portNumber}`
+      return 'Unknown'
+    }
+
+    // Check if port has SSL/TLS based on banner content
+    const isSSLPort = (portNumber: number | null, banner: string | null): boolean => {
+      if (banner) {
+        const bannerLower = banner.toLowerCase()
+        return bannerLower.includes('ssl') || 
+               bannerLower.includes('tls') || 
+               bannerLower.includes('https') ||
+               bannerLower.includes('starttls')
+      }
+      return false
     }
 
     // Helper function to get certificate status
@@ -213,6 +259,7 @@ export default defineComponent({
       formatPortDate,
       formatDate,
       getServiceName,
+      isSSLPort,
       getCertificateStatus,
       getCertificateStatusClass
     }

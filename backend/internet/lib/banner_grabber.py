@@ -4,6 +4,8 @@ import logging
 from typing import Optional, Dict, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import ssl
+import subprocess
+import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -47,95 +49,163 @@ class BannerGrabber:
             return None
     
     def _grab_banner_sync(self, host: str, port: int) -> Optional[str]:
-        """Synchronous banner grabbing function"""
+        """Synchronous banner grabbing that prefers nmap and falls back to sockets."""
+        # Try with nmap first
         try:
-            # Create socket
+            banner = self._grab_banner_via_nmap(host, port)
+            if banner:
+                return banner
+        except Exception as nmap_exc:
+            logger.debug(f"nmap banner grab failed for {host}:{port}: {nmap_exc}")
+
+        # Fallback to socket-based approach
+        return self._grab_banner_via_socket(host, port)
+
+    def _grab_banner_via_nmap(self, host: str, port: int) -> Optional[str]:
+        """Use nmap -sV (and banner script) to detect service banner and version."""
+        cmd = [
+            "nmap",
+            "-Pn",
+            "-n",
+            "-sV",
+            "--version-light",
+            "--host-timeout",
+            f"{self.timeout}s",
+            "--max-retries",
+            "1",
+            "--script",
+            "banner",
+            "-p",
+            str(port),
+            "-oX",
+            "-",
+            host,
+        ]
+        try:
+            completed = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=max(self.timeout + 5, 10),
+            )
+            stdout = completed.stdout or ""
+            if not stdout.strip():
+                return None
+
+            # Parse XML output
+            root = ET.fromstring(stdout)
+            service_elem = root.find(f".//port[@portid='{port}']/service")
+            banner_text: Optional[str] = None
+            if service_elem is not None:
+                name = service_elem.get("name") or ""
+                product = service_elem.get("product") or ""
+                version = service_elem.get("version") or ""
+                extrainfo = service_elem.get("extrainfo") or ""
+                banner_attr = service_elem.get("banner") or ""
+
+                parts: List[str] = []
+                if name:
+                    parts.append(name)
+                if product:
+                    parts.append(product)
+                if version:
+                    parts.append(version)
+                if extrainfo:
+                    parts.append(f"({extrainfo})")
+
+                if not parts and banner_attr:
+                    parts.append(banner_attr)
+
+                if parts:
+                    banner_text = " ".join(parts)
+
+            # Check for banner script output if service-based assembly failed
+            if not banner_text:
+                script_elem = root.find(f".//port[@portid='{port}']/script[@id='banner']")
+                if script_elem is not None:
+                    out = script_elem.get("output") or ""
+                    if out:
+                        banner_text = out
+
+            if banner_text:
+                return self._clean_banner_text(banner_text)
+
+            return None
+        except subprocess.TimeoutExpired:
+            return None
+        except ET.ParseError as parse_err:
+            logger.debug(f"nmap XML parse error for {host}:{port}: {parse_err}")
+            return None
+
+    def _grab_banner_via_socket(self, host: str, port: int) -> Optional[str]:
+        """Legacy socket-based banner grabbing as a fallback."""
+        sock = None
+        try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout)
-            
-            # Connect to the port
             sock.connect((host, port))
-            
-            # Try to receive data
+
             banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
-            
-            # For HTTPS ports, try SSL handshake
+
             if port in [443, 8443, 9443] and not banner:
                 try:
                     context = ssl.create_default_context()
                     context.check_hostname = False
                     context.verify_mode = ssl.CERT_NONE
-                    
                     ssl_sock = context.wrap_socket(sock, server_hostname=host)
                     ssl_sock.settimeout(self.timeout)
-                    
-                    # Try to get SSL certificate info or HTTP response
                     ssl_sock.send(b"GET / HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n")
                     banner = ssl_sock.recv(1024).decode('utf-8', errors='ignore').strip()
                     ssl_sock.close()
                 except Exception:
                     pass
-            
-            # For HTTP ports, try HTTP request
             elif port in [80, 8080, 8000, 8008, 8888] and not banner:
                 try:
                     sock.send(b"GET / HTTP/1.1\r\nHost: " + host.encode() + b"\r\n\r\n")
                     banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                 except Exception:
                     pass
-            
-            # For SSH ports, try SSH handshake
             elif port == 22 and not banner:
                 try:
                     banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                 except Exception:
                     pass
-            
-            # For FTP ports, try FTP banner
             elif port == 21 and not banner:
                 try:
                     banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                 except Exception:
                     pass
-            
-            # For SMTP ports, try SMTP banner
             elif port in [25, 587, 465] and not banner:
                 try:
                     banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                 except Exception:
                     pass
-            
-            # For other ports, just try to receive any data
             else:
                 try:
                     banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                 except Exception:
                     pass
-            
-            sock.close()
-            
-            # Clean up the banner
+
             if banner:
-                # Remove common prefixes and clean up
-                banner = banner.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
-                banner = ' '.join(banner.split())  # Remove extra whitespace
-                
-                # Limit banner length
-                if len(banner) > 500:
-                    banner = banner[:500] + "..."
-                
-                return banner
-            
+                return self._clean_banner_text(banner)
             return None
-            
         except Exception as e:
-            logger.debug(f"Banner grab failed for {host}:{port}: {e}")
+            logger.debug(f"Socket banner grab failed for {host}:{port}: {e}")
             return None
         finally:
             try:
-                sock.close()
-            except:
+                if sock:
+                    sock.close()
+            except Exception:
                 pass
+
+    def _clean_banner_text(self, banner: str) -> str:
+        """Normalize and truncate banner text consistently."""
+        banner = banner.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+        banner = ' '.join(banner.split())
+        if len(banner) > 500:
+            banner = banner[:500] + "..."
+        return banner
     
     async def grab_banners_batch(self, port_data: List[Tuple[str, int, str]]) -> Dict[Tuple[str, int], str]:
         """

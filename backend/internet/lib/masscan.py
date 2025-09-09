@@ -7,14 +7,15 @@ class MasscanConfigurator:
         self.config_file = 'masscan.conf'
         self.target = ''
         self.top_ports = False
-        self.UDP = '' #'-sU'
-        self.TCP = '' #'-sT'
+        self.UDP = '' # '-sU'
+        self.TCP = '' # '-sT'
         self.SYN = '-sS'
         self.banners = False
         self.wait = '0'
         self.rate = settings.MASSCAN_RATE
         self.exclude_file = 'masscan/exclude.conf'
         self.resume = False
+        self.all_ports = False
         # self.rotate = '30'
         # self.rotate_dir = 'masscan/output/'
         # self.output_format = 'json'
@@ -96,6 +97,9 @@ class MasscanConfigurator:
         else:
             raise ValueError("Ports must be provided as a string or list")
 
+        # Setting specific ports disables all-ports mode
+        self.all_ports = False
+
     def set_udp(self, enabled=True):
         self.UDP = '-sU' if enabled else ''
 
@@ -120,12 +124,17 @@ class MasscanConfigurator:
         # For now, we'll just store the state
         self.resume = enabled
     
+    def set_all_ports(self, enabled=True):
+        """Enable scanning all ports (equivalent to -p-)"""
+        self.all_ports = enabled
+    
     def get_cmd(self):
         cmd = [self.masscan_path]
 
         if self.target:
             cmd.append(self.target)
         
+        # Masscan supports specifying both TCP and UDP flags together
         if self.UDP:
             cmd.append(self.UDP)
         if self.TCP:
@@ -136,7 +145,10 @@ class MasscanConfigurator:
         if self.top_ports:
             cmd.append('--top-ports')
         else:
-            cmd.extend(['--ports', self.ports])
+            if self.all_ports:
+                cmd.extend(['--ports', '1-65535'])
+            else:
+                cmd.extend(['--ports', self.ports])
         
         if self.banners:
             cmd.append('--banners')
