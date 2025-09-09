@@ -8,6 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import hashlib
 
+try:
+    from cryptography import x509
+    from cryptography.hazmat.backends import default_backend
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,9 +61,14 @@ class SSLCertGrabber:
             
             # Connect and get certificate
             with socket.create_connection((host_ip, port), timeout=self.timeout) as sock:
-                with context.wrap_socket(sock, server_hostname=host_ip) as ssock:
+                with context.wrap_socket(sock, server_hostname=None) as ssock:
                     cert = ssock.getpeercert()
                     cert_der = ssock.getpeercert(binary_form=True)
+                    
+                    # If we have DER data but no parsed cert (common with IP addresses),
+                    # try to parse the DER data directly
+                    if cert_der and not cert:
+                        cert = self._parse_der_certificate(cert_der)
                     
                     if cert and cert_der:
                         return self._process_certificate(cert, cert_der, host_ip, port)
@@ -65,6 +77,59 @@ class SSLCertGrabber:
             
         except Exception as e:
             logger.debug(f"SSL certificate grab failed for {host_ip}:{port}: {e}")
+            return None
+    
+    def _parse_der_certificate(self, cert_der: bytes) -> Optional[Dict]:
+        """Parse DER certificate data using cryptography library"""
+        if not CRYPTOGRAPHY_AVAILABLE:
+            logger.debug("Cryptography library not available for DER parsing")
+            return None
+            
+        try:
+            cert_obj = x509.load_der_x509_certificate(cert_der, default_backend())
+            
+            # Convert to format similar to what getpeercert() returns
+            cert_dict = {}
+            
+            # Extract subject
+            subject = []
+            for attribute in cert_obj.subject:
+                subject.append([(attribute.oid._name, attribute.value)])
+            cert_dict['subject'] = subject
+            
+            # Extract issuer
+            issuer = []
+            for attribute in cert_obj.issuer:
+                issuer.append([(attribute.oid._name, attribute.value)])
+            cert_dict['issuer'] = issuer
+            
+            # Extract dates
+            cert_dict['notBefore'] = cert_obj.not_valid_before_utc.strftime('%b %d %H:%M:%S %Y GMT')
+            cert_dict['notAfter'] = cert_obj.not_valid_after_utc.strftime('%b %d %H:%M:%S %Y GMT')
+            
+            # Extract serial number
+            cert_dict['serialNumber'] = str(cert_obj.serial_number)
+            
+            # Extract version
+            cert_dict['version'] = cert_obj.version.value + 1  # X.509 versions are 0-indexed
+            
+            # Extract Subject Alternative Names
+            try:
+                san_ext = cert_obj.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+                san_list = []
+                for name in san_ext.value:
+                    if isinstance(name, x509.DNSName):
+                        san_list.append(('DNS', name.value))
+                    elif isinstance(name, x509.IPAddress):
+                        san_list.append(('IP Address', str(name.value)))
+                cert_dict['subjectAltName'] = san_list
+            except x509.ExtensionNotFound:
+                pass
+            
+            return cert_dict
+            
+        except Exception as e:
+            logger.debug(f"Failed to parse DER certificate: {e}")
             return None
     
     def _process_certificate(self, cert: Dict, cert_der: bytes, host_ip: str, port: int) -> Dict:

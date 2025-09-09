@@ -25,6 +25,131 @@
 
       <!-- Main Content -->
       <div class="main-content">
+        <!-- Host Overview Section -->
+        <section class="overview-section">
+          <h2 class="section-title">Host Overview</h2>
+          <div class="overview-grid">
+            <div class="stat-card">
+              <div class="stat-value">{{ host.ports.length }}</div>
+              <div class="stat-label">Open Ports</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ uniqueServices.length }}</div>
+              <div class="stat-label">Services</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ host.domains.length }}</div>
+              <div class="stat-label">Domains</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ host.ssl_certificates.length }}</div>
+              <div class="stat-label">SSL Certificates</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ sslPortsCount }}</div>
+              <div class="stat-label">SSL/TLS Ports</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ getSecurityScore() }}</div>
+              <div class="stat-label">Security Score</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Security Analysis Section -->
+        <section class="security-section">
+          <h2 class="section-title">Security Analysis</h2>
+          <div class="security-grid">
+            <div class="security-card">
+              <div class="security-header">
+                <h3 class="security-title">Open Services</h3>
+                <span class="security-status" :class="getServiceSecurityClass()">
+                  {{ getServiceSecurityStatus() }}
+                </span>
+              </div>
+              <div class="security-details">
+                <div class="service-breakdown">
+                  <div v-for="service in serviceBreakdown" :key="service.name" class="service-item">
+                    <span class="service-name">{{ service.name }}</span>
+                    <span class="service-count">{{ service.count }} port{{ (service.count as number) > 1 ? 's' : '' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="security-card">
+              <div class="security-header">
+                <h3 class="security-title">SSL/TLS Status</h3>
+                <span class="security-status" :class="getSSLSecurityClass()">
+                  {{ getSSLSecurityStatus() }}
+                </span>
+              </div>
+              <div class="security-details">
+                <div class="ssl-breakdown">
+                  <div class="ssl-item">
+                    <span class="ssl-label">SSL-enabled ports:</span>
+                    <span class="ssl-value">{{ sslPortsCount }}</span>
+                  </div>
+                  <div class="ssl-item">
+                    <span class="ssl-label">Valid certificates:</span>
+                    <span class="ssl-value">{{ validCertificatesCount }}</span>
+                  </div>
+                  <div class="ssl-item">
+                    <span class="ssl-label">Expired certificates:</span>
+                    <span class="ssl-value">{{ expiredCertificatesCount }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="security-card">
+              <div class="security-header">
+                <h3 class="security-title">Network Exposure</h3>
+                <span class="security-status" :class="getExposureClass()">
+                  {{ getExposureStatus() }}
+                </span>
+              </div>
+              <div class="security-details">
+                <div class="exposure-breakdown">
+                  <div class="exposure-item">
+                    <span class="exposure-label">Host type:</span>
+                    <span class="exposure-value">{{ host.private ? 'Private' : 'Public' }}</span>
+                  </div>
+                  <div class="exposure-item">
+                    <span class="exposure-label">High-risk ports:</span>
+                    <span class="exposure-value">{{ highRiskPorts.length }}</span>
+                  </div>
+                  <div class="exposure-item">
+                    <span class="exposure-label">Common services:</span>
+                    <span class="exposure-value">{{ commonServicePorts.length }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Scan Information Section -->
+        <section v-if="host.scan" class="scan-section">
+          <h2 class="section-title">Scan Information</h2>
+          <div class="scan-info-grid">
+            <div class="scan-info-card">
+              <div class="scan-info-item">
+                <span class="scan-label">Discovery Date:</span>
+                <span class="scan-value">{{ formatDate(host.last_seen) }}</span>
+              </div>
+              <div class="scan-info-item">
+                <span class="scan-label">Host Status:</span>
+                <span class="scan-value" :class="getHostStatusClass()">{{ getHostStatus() }}</span>
+              </div>
+              <div class="scan-info-item">
+                <span class="scan-label">Last Activity:</span>
+                <span class="scan-value">{{ formatLastSeen(host.last_seen) }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Ports Section -->
         <section class="ports-section">
           <h2 class="section-title">Open Ports</h2>
@@ -115,7 +240,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Host } from '@/types'
 import { formatLastSeen, formatDate, formatPortDate } from '@/utils/date'
@@ -251,6 +376,147 @@ export default defineComponent({
       loadHost()
     })
 
+    // Computed properties for the new sections
+    const uniqueServices = computed(() => {
+      if (!host.value) return []
+      const services = new Set()
+      host.value.ports.forEach(port => {
+        const service = getServiceName(port.port_number, port.banner)
+        if (service !== 'Unknown') {
+          services.add(service)
+        }
+      })
+      return Array.from(services)
+    })
+
+    const sslPortsCount = computed(() => {
+      if (!host.value) return 0
+      return host.value.ports.filter(port => isSSLPort(port.port_number, port.banner)).length
+    })
+
+    const validCertificatesCount = computed(() => {
+      if (!host.value) return 0
+      return host.value.ssl_certificates.filter(cert => getCertificateStatus(cert) === 'Valid').length
+    })
+
+    const expiredCertificatesCount = computed(() => {
+      if (!host.value) return 0
+      return host.value.ssl_certificates.filter(cert => getCertificateStatus(cert) === 'Expired').length
+    })
+
+    const serviceBreakdown = computed(() => {
+      if (!host.value) return []
+      const services: Record<string, number> = {}
+      host.value.ports.forEach(port => {
+        const service = getServiceName(port.port_number, port.banner)
+        services[service] = (services[service] || 0) + 1
+      })
+      return Object.entries(services)
+        .map(([name, count]) => ({ name, count: count as number }))
+        .sort((a, b) => b.count - a.count)
+    })
+
+    const highRiskPorts = computed(() => {
+      if (!host.value) return []
+      const riskPorts = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 1433, 3306, 3389, 5432, 5900]
+      return host.value.ports.filter(port => port.port_number && riskPorts.includes(port.port_number))
+    })
+
+    const commonServicePorts = computed(() => {
+      if (!host.value) return []
+      const commonPorts = [80, 443, 22, 21, 25, 53, 110, 143, 993, 995]
+      return host.value.ports.filter(port => port.port_number && commonPorts.includes(port.port_number))
+    })
+
+    // Security analysis methods
+    const getSecurityScore = () => {
+      if (!host.value) return 'N/A'
+      let score = 100
+      
+      // Deduct points for high-risk ports
+      score -= highRiskPorts.value.length * 10
+      
+      // Deduct points for expired certificates
+      score -= expiredCertificatesCount.value * 15
+      
+      // Add points for SSL usage
+      score += sslPortsCount.value * 5
+      
+      // Add points for valid certificates
+      score += validCertificatesCount.value * 10
+      
+      return Math.max(0, Math.min(100, score))
+    }
+
+    const getServiceSecurityStatus = () => {
+      const riskCount = highRiskPorts.value.length
+      if (riskCount === 0) return 'Good'
+      if (riskCount <= 2) return 'Moderate'
+      return 'High Risk'
+    }
+
+    const getServiceSecurityClass = () => {
+      const status = getServiceSecurityStatus()
+      if (status === 'Good') return 'status-valid'
+      if (status === 'Moderate') return 'status-warning'
+      return 'status-critical'
+    }
+
+    const getSSLSecurityStatus = () => {
+      const sslCount = sslPortsCount.value
+      const validCount = validCertificatesCount.value
+      const expiredCount = expiredCertificatesCount.value
+      
+      if (sslCount === 0) return 'No SSL'
+      if (expiredCount > 0) return 'Issues Found'
+      if (validCount > 0) return 'Good'
+      return 'Unknown'
+    }
+
+    const getSSLSecurityClass = () => {
+      const status = getSSLSecurityStatus()
+      if (status === 'Good') return 'status-valid'
+      if (status === 'Issues Found') return 'status-critical'
+      if (status === 'No SSL') return 'status-warning'
+      return 'status-unknown'
+    }
+
+    const getExposureStatus = () => {
+      if (!host.value) return 'Unknown'
+      if (host.value.private) return 'Private'
+      const riskCount = highRiskPorts.value.length
+      if (riskCount === 0) return 'Low'
+      if (riskCount <= 3) return 'Moderate'
+      return 'High'
+    }
+
+    const getExposureClass = () => {
+      const status = getExposureStatus()
+      if (status === 'Low' || status === 'Private') return 'status-valid'
+      if (status === 'Moderate') return 'status-warning'
+      if (status === 'High') return 'status-critical'
+      return 'status-unknown'
+    }
+
+    const getHostStatus = () => {
+      if (!host.value || !host.value.last_seen) return 'Unknown'
+      const now = new Date()
+      const lastSeen = new Date(host.value.last_seen)
+      const daysSinceLastSeen = (now.getTime() - lastSeen.getTime()) / (1000 * 60 * 60 * 24)
+      
+      if (daysSinceLastSeen <= 1) return 'Active'
+      if (daysSinceLastSeen <= 7) return 'Recent'
+      if (daysSinceLastSeen <= 30) return 'Stale'
+      return 'Inactive'
+    }
+
+    const getHostStatusClass = () => {
+      const status = getHostStatus()
+      if (status === 'Active') return 'status-valid'
+      if (status === 'Recent') return 'status-warning'
+      return 'status-critical'
+    }
+
     return {
       host,
       loading,
@@ -261,7 +527,23 @@ export default defineComponent({
       getServiceName,
       isSSLPort,
       getCertificateStatus,
-      getCertificateStatusClass
+      getCertificateStatusClass,
+      uniqueServices,
+      sslPortsCount,
+      validCertificatesCount,
+      expiredCertificatesCount,
+      serviceBreakdown,
+      highRiskPorts,
+      commonServicePorts,
+      getSecurityScore,
+      getServiceSecurityStatus,
+      getServiceSecurityClass,
+      getSSLSecurityStatus,
+      getSSLSecurityClass,
+      getExposureStatus,
+      getExposureClass,
+      getHostStatus,
+      getHostStatusClass
     }
   }
 })
@@ -660,6 +942,172 @@ export default defineComponent({
   color: white;
   border-radius: 12px;
   font-size: 12px;
+  font-weight: 500;
+}
+
+/* Overview Section */
+.overview-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #404040;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.stat-card:hover {
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* Security Analysis Section */
+.security-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.security-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #404040;
+}
+
+.security-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.security-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.security-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.security-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service-breakdown, .ssl-breakdown, .exposure-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service-item, .ssl-item, .exposure-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #404040;
+}
+
+.service-item:last-child, .ssl-item:last-child, .exposure-item:last-child {
+  border-bottom: none;
+}
+
+.service-name, .ssl-label, .exposure-label {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.service-count, .ssl-value, .exposure-value {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* Scan Information Section */
+.scan-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.scan-info-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.scan-info-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #404040;
+}
+
+.scan-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #404040;
+}
+
+.scan-info-item:last-child {
+  border-bottom: none;
+}
+
+.scan-label {
+  font-size: 14px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.scan-value {
+  font-size: 14px;
+  color: #ffffff;
   font-weight: 500;
 }
 </style>

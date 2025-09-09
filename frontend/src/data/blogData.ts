@@ -1,5 +1,5 @@
 // Auto-generated from markdown files - DO NOT EDIT MANUALLY
-// Generated on: 2025-09-09T01:48:34.386Z
+// Generated on: 2025-09-09T14:10:35.517Z
 // Total posts processed: 8
 
 export interface BlogPost {
