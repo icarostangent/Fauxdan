@@ -40,6 +40,18 @@ export interface Host {
   public_host: boolean | null
   scan: number | null
   score: number | null
+  // Geolocation fields
+  country: string | null
+  country_code: string | null
+  region: string | null
+  city: string | null
+  latitude: number | null
+  longitude: number | null
+  timezone: string | null
+  isp: string | null
+  organization: string | null
+  asn: string | null
+  geolocation_updated: string | null
 }
 
 export interface PaginatedResponse<T> {

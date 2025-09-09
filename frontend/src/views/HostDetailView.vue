@@ -129,6 +129,82 @@
           </div>
         </section>
 
+        <!-- Geolocation Section -->
+        <section v-if="hasLocationData" class="location-section">
+          <h2 class="section-title">Geolocation</h2>
+          <div class="location-grid">
+            <div class="location-card">
+              <div class="location-header">
+                <h3 class="location-title">📍 Location Information</h3>
+                <span v-if="host.geolocation_updated" class="location-updated">
+                  Updated: {{ formatDate(host.geolocation_updated) }}
+                </span>
+              </div>
+              <div class="location-details">
+                <div v-if="host.city || host.region || host.country" class="location-item">
+                  <span class="location-label">Location:</span>
+                  <span class="location-value">{{ getLocationDisplay() }}</span>
+                </div>
+                <div v-if="host.country_code" class="location-item">
+                  <span class="location-label">Country Code:</span>
+                  <span class="location-value">{{ host.country_code }}</span>
+                </div>
+                <div v-if="host.latitude && host.longitude" class="location-item">
+                  <span class="location-label">Coordinates:</span>
+                  <span class="location-value">{{ host.latitude.toFixed(4) }}, {{ host.longitude.toFixed(4) }}</span>
+                </div>
+                <div v-if="host.timezone" class="location-item">
+                  <span class="location-label">Timezone:</span>
+                  <span class="location-value">{{ host.timezone }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="location-card">
+              <div class="location-header">
+                <h3 class="location-title">🌐 Network Information</h3>
+              </div>
+              <div class="location-details">
+                <div v-if="host.isp" class="location-item">
+                  <span class="location-label">ISP:</span>
+                  <span class="location-value">{{ host.isp }}</span>
+                </div>
+                <div v-if="host.organization" class="location-item">
+                  <span class="location-label">Organization:</span>
+                  <span class="location-value">{{ host.organization }}</span>
+                </div>
+                <div v-if="host.asn" class="location-item">
+                  <span class="location-label">ASN:</span>
+                  <span class="location-value">{{ host.asn }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Interactive Map -->
+            <div v-if="host.latitude && host.longitude" class="map-card">
+              <div class="map-header">
+                <h3 class="location-title">🗺️ Map Location</h3>
+                <div class="map-controls">
+                  <span class="coordinates-text">{{ host.latitude.toFixed(4) }}, {{ host.longitude.toFixed(4) }}</span>
+                </div>
+              </div>
+              <div class="map-container">
+                <div 
+                  :id="`map-${host.id}`" 
+                  class="interactive-map"
+                  ref="mapContainer"
+                ></div>
+                <div v-if="mapLoading" class="map-loading">
+                  Loading map...
+                </div>
+                <div v-if="mapError" class="map-error">
+                  {{ mapError }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Scan Information Section -->
         <section v-if="host.scan" class="scan-section">
           <h2 class="section-title">Scan Information</h2>
@@ -240,7 +316,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed } from 'vue'
+import { defineComponent, ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Host } from '@/types'
 import { formatLastSeen, formatDate, formatPortDate } from '@/utils/date'
@@ -255,6 +331,10 @@ export default defineComponent({
     const host = ref<Host | null>(null)
     const loading = ref(true)
     const error = ref('')
+    const mapContainer = ref<HTMLElement | null>(null)
+    const mapLoading = ref(false)
+    const mapError = ref('')
+    let map: any = null
 
     const loadHost = async () => {
       try {
@@ -370,10 +450,23 @@ export default defineComponent({
       }
     }
 
-    onMounted(() => {
+    onMounted(async () => {
       // Track page view when component mounts
       analytics.trackPageView(`/hosts/${route.params.id}`)
-      loadHost()
+      await loadHost()
+      
+      // Initialize map after host data is loaded
+      if (host.value && host.value.latitude && host.value.longitude) {
+        await initializeMap()
+      }
+    })
+
+    // Cleanup map on unmount
+    onUnmounted(() => {
+      if (map) {
+        map.remove()
+        map = null
+      }
     })
 
     // Computed properties for the new sections
@@ -517,6 +610,114 @@ export default defineComponent({
       return 'status-critical'
     }
 
+    // Geolocation methods
+    const hasLocationData = computed(() => {
+      if (!host.value) return false
+      return !!(host.value.country || host.value.city || host.value.isp || 
+               host.value.latitude || host.value.longitude)
+    })
+
+    const getLocationDisplay = () => {
+      if (!host.value) return 'Unknown Location'
+      const parts = []
+      if (host.value.city) parts.push(host.value.city)
+      if (host.value.region) parts.push(host.value.region)
+      if (host.value.country) parts.push(host.value.country)
+      return parts.length > 0 ? parts.join(', ') : 'Unknown Location'
+    }
+
+    const loadLeaflet = async (): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        // Check if Leaflet is already loaded
+        if ((window as any).L) {
+          resolve()
+          return
+        }
+
+        // Add Leaflet CSS
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+        document.head.appendChild(link)
+        
+        // Add Leaflet JS
+        const script = document.createElement('script')
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+        script.onload = () => {
+          // Wait a bit more to ensure L is fully available
+          setTimeout(() => {
+            if ((window as any).L) {
+              resolve()
+            } else {
+              reject(new Error('Leaflet failed to load'))
+            }
+          }, 100)
+        }
+        script.onerror = () => reject(new Error('Failed to load Leaflet script'))
+        document.head.appendChild(script)
+      })
+    }
+
+    const initializeMap = async () => {
+      try {
+        if (!host.value || !host.value.latitude || !host.value.longitude) return
+        
+        mapLoading.value = true
+        mapError.value = ''
+        
+        await nextTick()
+        
+        // Load Leaflet if not already loaded
+        await loadLeaflet()
+        
+        const mapId = `map-${host.value.id}`
+        const mapElement = document.getElementById(mapId)
+        
+        if (!mapElement) {
+          throw new Error('Map element not found')
+        }
+
+        if (!(window as any).L) {
+          throw new Error('Leaflet not available')
+        }
+
+        // Clear any existing map
+        if (map) {
+          map.remove()
+          map = null
+        }
+        
+        // Initialize map
+        const L = (window as any).L
+        map = L.map(mapId).setView([host.value.latitude, host.value.longitude], 10)
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map)
+        
+        // Add marker
+        const marker = L.marker([host.value.latitude, host.value.longitude]).addTo(map)
+        
+        // Add popup with host info
+        const locationText = getLocationDisplay()
+        marker.bindPopup(`
+          <div style="text-align: center;">
+            <strong>${host.value.ip}</strong><br>
+            <small>${locationText}</small><br>
+            <small>${host.value.latitude.toFixed(4)}, ${host.value.longitude.toFixed(4)}</small>
+          </div>
+        `).openPopup()
+        
+        mapLoading.value = false
+        
+      } catch (error) {
+        console.error('Failed to initialize map:', error)
+        mapLoading.value = false
+        mapError.value = 'Failed to load map'
+      }
+    }
+
     return {
       host,
       loading,
@@ -543,7 +744,13 @@ export default defineComponent({
       getExposureStatus,
       getExposureClass,
       getHostStatus,
-      getHostStatusClass
+      getHostStatusClass,
+      hasLocationData,
+      getLocationDisplay,
+      mapContainer,
+      mapLoading,
+      mapError,
+      initializeMap
     }
   }
 })
@@ -1109,5 +1316,155 @@ export default defineComponent({
   font-size: 14px;
   color: #ffffff;
   font-weight: 500;
+}
+
+/* Geolocation Section */
+.location-section {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #404040;
+}
+
+.location-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.location-card, .map-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #404040;
+}
+
+.location-header, .map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.location-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.location-updated {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.location-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.location-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #404040;
+}
+
+.location-item:last-child {
+  border-bottom: none;
+}
+
+.location-label {
+  font-size: 14px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.location-value {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
+  text-align: right;
+}
+
+.map-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coordinates-text {
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: monospace;
+}
+
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #404040;
+}
+
+.interactive-map {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+}
+
+/* Override Leaflet styles for dark theme */
+.interactive-map :deep(.leaflet-popup-content-wrapper) {
+  background-color: #1a1a1a;
+  color: #ffffff;
+  border-radius: 6px;
+}
+
+.interactive-map :deep(.leaflet-popup-tip) {
+  background-color: #1a1a1a;
+}
+
+.interactive-map :deep(.leaflet-control-attribution) {
+  background-color: rgba(26, 26, 26, 0.8);
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+.interactive-map :deep(.leaflet-control-zoom a) {
+  background-color: #2d2d2d;
+  color: #ffffff;
+  border: 1px solid #404040;
+}
+
+.interactive-map :deep(.leaflet-control-zoom a:hover) {
+  background-color: #404040;
+}
+
+.map-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9ca3af;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.map-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ef4444;
+  font-size: 14px;
+  text-align: center;
+  z-index: 1000;
+  background: rgba(26, 26, 26, 0.9);
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #404040;
 }
 </style>

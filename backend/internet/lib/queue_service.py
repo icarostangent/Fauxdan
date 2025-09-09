@@ -368,6 +368,27 @@ class QueueService:
                     priority=1  # Lower priority than banner grab
                 )
             
+            # Queue geolocation job for this host (only once per host or if data is stale)
+            should_queue_geo = False
+            if host_created:
+                should_queue_geo = True
+            elif host_obj.needs_geolocation_update():
+                should_queue_geo = True
+            
+            if should_queue_geo and not AncillaryJob.objects.filter(
+                host=host_obj,
+                job_type='geolocation',
+                status__in=['pending', 'running', 'completed']
+            ).exists():
+                geo_job = AncillaryJob.objects.create(
+                    job_type='geolocation',
+                    host_ip=host_ip,
+                    host=host_obj,
+                    scanner_job=job,
+                    status='pending',
+                    priority=2  # Lower priority than banner/domain jobs
+                )
+            
             # Queue SSL certificate job for HTTPS ports
             if port_number in [443, 8443, 9443, 10443]:
                 ssl_job = AncillaryJob.objects.create(
@@ -475,6 +496,8 @@ class QueueService:
                 result_data = await self._process_domain_enum(job)
             elif job.job_type == 'ssl_cert':
                 result_data = await self._process_ssl_cert(job)
+            elif job.job_type == 'geolocation':
+                result_data = await self._process_geolocation(job)
             else:
                 logger.warning(f'Unknown job type: {job.job_type}')
                 result_data = {'error': f'Unknown job type: {job.job_type}'}
@@ -738,6 +761,80 @@ class QueueService:
             await sync_to_async(save_ssl_cert)()
 
         return result_data
+    
+    async def _process_geolocation(self, job: 'AncillaryJob') -> dict:
+        """Process geolocation job for a host"""
+        from asgiref.sync import sync_to_async
+        from internet.lib.geolocation import get_ip_geolocation_async
+        from internet.models import Host
+        import ipaddress
+        
+        logger.info(f"Processing geolocation for {job.host_ip}")
+        
+        # Skip private IP addresses
+        try:
+            ip_obj = ipaddress.ip_address(job.host_ip)
+            if ip_obj.is_private:
+                logger.info(f"Skipping geolocation for private IP: {job.host_ip}")
+                return {'geolocation': None, 'reason': 'private_ip'}
+        except ValueError:
+            logger.warning(f"Invalid IP address format: {job.host_ip}")
+            return {'geolocation': None, 'reason': 'invalid_ip'}
+        
+        # Get geolocation data using async service
+        try:
+            location_data = await get_ip_geolocation_async(job.host_ip)
+            
+            if location_data:
+                # Update host with geolocation data
+                def update_host():
+                    try:
+                        host = Host.objects.get(id=job.host_id)
+                        host.country = location_data.get('country')
+                        host.country_code = location_data.get('country_code')
+                        host.region = location_data.get('region')
+                        host.city = location_data.get('city')
+                        host.latitude = location_data.get('latitude')
+                        host.longitude = location_data.get('longitude')
+                        host.timezone = location_data.get('timezone')
+                        host.isp = location_data.get('isp')
+                        host.organization = location_data.get('organization')
+                        host.asn = location_data.get('asn')
+                        host.geolocation_updated = timezone.now()
+                        host.save()
+                        return True
+                    except Exception as e:
+                        logger.error(f"Failed to update host {job.host_ip} with geolocation: {e}")
+                        return False
+                
+                success = await sync_to_async(update_host)()
+                
+                if success:
+                    logger.info(f"✓ {job.host_ip} -> {location_data.get('city', 'Unknown')}, "
+                              f"{location_data.get('country', 'Unknown')} "
+                              f"({location_data.get('provider', 'Unknown')})")
+                    return {'geolocation': location_data, 'updated': True}
+                else:
+                    return {'geolocation': location_data, 'updated': False, 'reason': 'db_error'}
+            else:
+                logger.info(f"✗ Failed to geolocate {job.host_ip}")
+                # Still update the timestamp to avoid repeated attempts
+                def update_timestamp():
+                    try:
+                        host = Host.objects.get(id=job.host_id)
+                        host.geolocation_updated = timezone.now()
+                        host.save(update_fields=['geolocation_updated'])
+                        return True
+                    except Exception as e:
+                        logger.error(f"Failed to update timestamp for {job.host_ip}: {e}")
+                        return False
+                
+                await sync_to_async(update_timestamp)()
+                return {'geolocation': None, 'reason': 'no_data'}
+                
+        except Exception as e:
+            logger.error(f"Error during geolocation for {job.host_ip}: {e}")
+            return {'geolocation': None, 'reason': 'error', 'error': str(e)}
     
     
     async def _process_nmap_job(self, job: ScannerJob):

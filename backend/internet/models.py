@@ -25,6 +25,19 @@ class Host(models.Model):
     private = models.BooleanField(default=False)
     scan = models.ForeignKey('Scan', related_name='hosts', null=True, blank=True, on_delete=models.CASCADE)
     last_seen = models.DateTimeField(blank=True, null=True)
+    
+    # Geolocation fields
+    country = models.CharField(max_length=100, blank=True, null=True)
+    country_code = models.CharField(max_length=2, blank=True, null=True)
+    region = models.CharField(max_length=100, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    latitude = models.FloatField(blank=True, null=True)
+    longitude = models.FloatField(blank=True, null=True)
+    timezone = models.CharField(max_length=50, blank=True, null=True)
+    isp = models.CharField(max_length=200, blank=True, null=True)
+    organization = models.CharField(max_length=200, blank=True, null=True)
+    asn = models.CharField(max_length=50, blank=True, null=True)
+    geolocation_updated = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return str(self.ip)
@@ -34,10 +47,33 @@ class Host(models.Model):
         from django.utils import timezone
         self.last_seen = timezone.now()
         self.save(update_fields=['last_seen'])
+    
+    def get_location_display(self):
+        """Get a human-readable location string"""
+        parts = []
+        if self.city:
+            parts.append(self.city)
+        if self.region:
+            parts.append(self.region)
+        if self.country:
+            parts.append(self.country)
+        return ', '.join(parts) if parts else 'Unknown Location'
+    
+    def needs_geolocation_update(self, max_age_days=30):
+        """Check if host needs geolocation update"""
+        if not self.geolocation_updated:
+            return True
+        
+        from django.utils import timezone
+        from datetime import timedelta
+        cutoff_date = timezone.now() - timedelta(days=max_age_days)
+        return self.geolocation_updated < cutoff_date
 
     class Meta:
         indexes = [
             models.Index(fields=['ip']),  # For IP searches
+            models.Index(fields=['country']),  # For location searches
+            models.Index(fields=['geolocation_updated']),  # For update queries
         ]
 
 
