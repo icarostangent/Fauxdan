@@ -17,6 +17,6 @@ urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health'),
     path('create-scan/', CreateScanView.as_view(), name='create-scan'),
     path('search/', UniversalSearchView.as_view(), name='universal-search'),
-    path('metrics/scanner/', scanner_metrics, name='scanner-metrics'),
+    path('scanner-metrics/', scanner_metrics, name='scanner-metrics'),
     path('', include(router.urls)),
 ]

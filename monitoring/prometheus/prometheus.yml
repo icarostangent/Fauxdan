@@ -40,6 +40,13 @@ scrape_configs:
     metrics_path: '/metrics/'
     scrape_interval: 30s
 
+  # Scanner Service Metrics
+  - job_name: 'scanner-service'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/api/scanner-metrics/'
+    scrape_interval: 30s
+
   # Frontend (will be added when we implement metrics endpoint)
   # - job_name: 'vue-frontend'
   #   static_configs:

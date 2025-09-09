@@ -136,6 +136,46 @@
           "interval": "",
           "legendFormat": "Failed Jobs",
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_jobs_total{status=\"running\"}",
+          "interval": "",
+          "legendFormat": "Ancillary Running Jobs",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_jobs_total{status=\"pending\"}",
+          "interval": "",
+          "legendFormat": "Ancillary Pending Jobs",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_jobs_total{status=\"completed\"}",
+          "interval": "",
+          "legendFormat": "Ancillary Completed Jobs",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_jobs_total{status=\"failed\"}",
+          "interval": "",
+          "legendFormat": "Ancillary Failed Jobs",
+          "refId": "H"
         }
       ],
       "title": "Job Status",
@@ -344,6 +384,16 @@
           "interval": "",
           "legendFormat": "Low Priority Queue",
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_jobs_pending_total",
+          "interval": "",
+          "legendFormat": "Ancillary Pending",
+          "refId": "D"
         }
       ],
       "title": "Queue Depth",
@@ -538,10 +588,30 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "scanner_timeouts_total",
+          "expr": "scanner_job_cancelled_total",
           "interval": "",
-          "legendFormat": "Timeouts (last hour)",
+          "legendFormat": "Cancelled (last hour)",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_job_errors_total",
+          "interval": "",
+          "legendFormat": "Ancillary Errors (last hour)",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "scanner_ancillary_job_cancelled_total",
+          "interval": "",
+          "legendFormat": "Ancillary Cancelled (last hour)",
+          "refId": "D"
         }
       ],
       "title": "Error Rate",

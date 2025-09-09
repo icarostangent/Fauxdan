@@ -122,18 +122,24 @@ def scanner_metrics(request):
     Scanner metrics endpoint for Prometheus with real-time data
     """
     try:
-        from internet.models import ScannerJob, JobQueue, JobWorker, Scan, Host, Port
+        from internet.models import ScannerJob, AncillaryJob, JobQueue, JobWorker, Scan, Host, Port
         from django.utils import timezone
         from datetime import timedelta
         
         now = timezone.now()
         one_hour_ago = now - timedelta(hours=1)
         
-        # Job metrics with labels
+        # Job metrics with labels (ScannerJob)
         job_stats = {}
-        for status in ['pending', 'running', 'completed', 'failed', 'timeout']:
+        for status in ['pending', 'queued', 'running', 'completed', 'failed', 'cancelled', 'retrying']:
             count = ScannerJob.objects.filter(status=status).count()
             job_stats[status] = count
+            
+        # Ancillary job metrics
+        ancillary_job_stats = {}
+        for status in ['pending', 'queued', 'running', 'completed', 'failed', 'cancelled', 'retrying']:
+            count = AncillaryJob.objects.filter(status=status).count()
+            ancillary_job_stats[status] = count
         
         # Worker metrics
         active_workers = JobWorker.objects.filter(status='active').count()
@@ -144,10 +150,13 @@ def scanner_metrics(request):
         for queue in JobQueue.objects.all():
             pending = ScannerJob.objects.filter(queue=queue, status='pending').count()
             queue_stats[queue.name] = pending
+            
+        # Ancillary jobs don't have queues, so we'll track total pending
+        ancillary_pending_total = AncillaryJob.objects.filter(status='pending').count()
         
         # Real-time discovery metrics (last hour)
-        recent_hosts = Host.objects.filter(created_at__gte=one_hour_ago).count()
-        recent_ports = Port.objects.filter(created_at__gte=one_hour_ago).count()
+        recent_hosts = Host.objects.filter(last_seen__gte=one_hour_ago).count()
+        recent_ports = Port.objects.filter(last_seen__gte=one_hour_ago).count()
         
         # Running jobs with progress
         running_jobs = ScannerJob.objects.filter(status='running')
@@ -156,11 +165,21 @@ def scanner_metrics(request):
         # Error metrics (last hour)
         recent_errors = ScannerJob.objects.filter(
             status='failed', 
-            updated_at__gte=one_hour_ago
+            completed_at__gte=one_hour_ago
         ).count()
-        recent_timeouts = ScannerJob.objects.filter(
-            status='timeout', 
-            updated_at__gte=one_hour_ago
+        recent_cancelled = ScannerJob.objects.filter(
+            status='cancelled', 
+            completed_at__gte=one_hour_ago
+        ).count()
+        
+        # Ancillary job error metrics (last hour)
+        recent_ancillary_errors = AncillaryJob.objects.filter(
+            status='failed',
+            completed_at__gte=one_hour_ago
+        ).count()
+        recent_ancillary_cancelled = AncillaryJob.objects.filter(
+            status='cancelled',
+            completed_at__gte=one_hour_ago
         ).count()
         
         # Generate Prometheus format
@@ -169,6 +188,10 @@ def scanner_metrics(request):
         # Job status metrics with proper labels
         for status, count in job_stats.items():
             metrics.append(f'scanner_jobs_total{{status="{status}"}} {count}')
+            
+        # Ancillary job status metrics
+        for status, count in ancillary_job_stats.items():
+            metrics.append(f'scanner_ancillary_jobs_total{{status="{status}"}} {count}')
         
         # Worker metrics
         metrics.append(f'scanner_workers_total{{status="active"}} {active_workers}')
@@ -177,6 +200,9 @@ def scanner_metrics(request):
         # Queue depth metrics
         for queue_name, pending in queue_stats.items():
             metrics.append(f'scanner_queue_depth{{queue="{queue_name}"}} {pending}')
+            
+        # Ancillary job pending count (no queues for ancillary jobs)
+        metrics.append(f'scanner_ancillary_jobs_pending_total {ancillary_pending_total}')
         
         # Discovery metrics (total and recent)
         total_hosts = Host.objects.count()
@@ -190,7 +216,9 @@ def scanner_metrics(request):
         
         # Error metrics
         metrics.append(f'scanner_job_errors_total {recent_errors}')
-        metrics.append(f'scanner_timeouts_total {recent_timeouts}')
+        metrics.append(f'scanner_job_cancelled_total {recent_cancelled}')
+        metrics.append(f'scanner_ancillary_job_errors_total {recent_ancillary_errors}')
+        metrics.append(f'scanner_ancillary_job_cancelled_total {recent_ancillary_cancelled}')
         
         # Running job progress
         for job in running_jobs:
